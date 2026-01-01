@@ -25,7 +25,7 @@ A single CLI command that:
 ### Quick Status Check
 ```bash
 $ cclimits --oneline
-Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-flash 7% ✅ | 2.5-pro 10% ✅ )
+Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ )
 ```
 
 ### Detailed Analysis

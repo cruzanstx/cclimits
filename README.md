@@ -54,7 +54,7 @@ cclimits --oneline 7d # Compact one-liner (7d window)
 ### Compact One-liner (--oneline)
 
 ```
-Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-flash 7.3% ✅ | 2.5-pro 10% ✅ | 3-pro 10% ✅ )
+Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ )
 ```
 
 ### Detailed Output (default)
@@ -90,6 +90,28 @@ Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-flash 7.
     Used:      8%
     Remaining: 92%
     Resets in: 2h 15m
+
+==================================================
+  Gemini CLI
+==================================================
+  🔑 Auth: OAuth (Google Account)
+  ✅ Connected
+  📊 Tier: standard
+
+  Quota by Tier:
+    3-Flash: 7.0% used, 93.0% remaining
+    Flash: 1.0% used, 99.0% remaining
+    Pro: 10.0% used, 90.0% remaining
+
+==================================================
+  Z.AI (GLM-4)
+==================================================
+  ✅ Connected
+
+  Token Quota:
+    Used:      1%
+    Remaining: 99%
+    (10,000 / 1,000,000 tokens)
 ```
 
 ## Status Icons

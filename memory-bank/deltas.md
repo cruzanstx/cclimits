@@ -1,5 +1,14 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-01-01: Gemini Tiers Refactoring
+
+- Grouped Gemini models by quota tier (3-Flash, Flash, Pro)
+- Reduced display from 6 models to 3 tiers
+- Each tier shows usage from first available model in quota bucket
+- Status icons continue to work correctly across all tiers
+
+**Files:** `lib/cclimits.py`
+
 ## 2026-01-01: Initial npm Release (v1.0.0)
 
 - Published to npm as `cclimits`

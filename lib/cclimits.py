@@ -24,6 +24,14 @@ import urllib.error
 import urllib.parse
 
 
+
+
+GEMINI_TIERS = {
+    "3-Flash": ["gemini-3-flash-preview"],
+    "Flash": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
+    "Pro": ["gemini-2.5-pro", "gemini-3-pro-preview"],
+}
+
 def http_get(url: str, headers: dict) -> tuple[int, dict | str]:
     """Make HTTP GET request, return (status_code, response_data)"""
     if HAS_REQUESTS:
@@ -910,25 +918,22 @@ def print_oneline(results: dict, window: str = "5h"):
         elif "error" in data:
             parts.append("Z.AI: ❌")
 
-    # Gemini (show individual models)
+    # Gemini (group by quota tier)
     if "gemini" in results:
         data = results["gemini"]
         if data.get("status") == "ok" and "models" in data:
             gemini_parts = []
-            # Prioritized model order
-            model_order = [
-                ("gemini-3-flash-preview", "3-flash"),
-                ("gemini-2.5-pro", "2.5-pro"),
-                ("gemini-3-pro-preview", "3-pro"),
-                ("gemini-2.5-flash", "2.5-flash"),
-                ("gemini-2.5-flash-lite", "2.5-lite"),
-                ("gemini-2.0-flash", "2.0-flash"),
-            ]
-            for model_id, short_name in model_order:
-                if model_id in data["models"]:
-                    pct_str = data["models"][model_id]["used"]
-                    pct = float(pct_str.rstrip("%"))
-                    gemini_parts.append(f"{short_name} {pct_str} {get_status_icon(pct)}")
+            # Display tiers in order: 3-Flash, Flash, Pro
+            for tier_name in ["3-Flash", "Flash", "Pro"]:
+                if tier_name not in GEMINI_TIERS:
+                    continue
+                # Find first model in this tier with data
+                for model_id in GEMINI_TIERS[tier_name]:
+                    if model_id in data["models"]:
+                        pct_str = data["models"][model_id]["used"]
+                        pct = float(pct_str.rstrip("%"))
+                        gemini_parts.append(f"{tier_name} {pct_str} {get_status_icon(pct)}")
+                        break  # Only show once per tier
             if gemini_parts:
                 parts.append(f"Gemini: ( {' | '.join(gemini_parts)} )")
         elif "error" in data:
