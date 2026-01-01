@@ -1,0 +1,38 @@
+{
+  "name": "cclimits",
+  "version": "1.0.0",
+  "description": "Check quota/usage for AI coding CLI tools (Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI)",
+  "bin": {
+    "cclimits": "./bin/cclimits.js"
+  },
+  "files": [
+    "bin",
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cruzanstx/cclimits.git"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "codex",
+    "openai",
+    "gemini",
+    "zai",
+    "ai",
+    "quota",
+    "usage",
+    "rate-limit",
+    "cli"
+  ],
+  "author": "cruzanstx",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cruzanstx/cclimits/issues"
+  },
+  "homepage": "https://github.com/cruzanstx/cclimits#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

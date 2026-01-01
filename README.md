@@ -11,13 +11,28 @@ Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gem
 
 ## Installation
 
+### Via npm (recommended)
+
+```bash
+# Run directly without installing
+npx cclimits
+
+# Or install globally
+npm install -g cclimits
+cclimits
+```
+
+**Requires**: Python 3.10+ installed on your system.
+
+### Via Git
+
 ```bash
 # Clone and symlink
 git clone https://github.com/cruzanstx/cclimits.git
-ln -s $(pwd)/cclimits/cclimits.py ~/.local/bin/cclimits
+ln -s $(pwd)/cclimits/lib/cclimits.py ~/.local/bin/cclimits
 
 # Or just download
-curl -o ~/.local/bin/cclimits https://raw.githubusercontent.com/cruzanstx/cclimits/main/cclimits.py
+curl -o ~/.local/bin/cclimits https://raw.githubusercontent.com/cruzanstx/cclimits/main/lib/cclimits.py
 chmod +x ~/.local/bin/cclimits
 ```
 
