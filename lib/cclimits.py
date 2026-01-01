@@ -960,11 +960,15 @@ Setup (one-time):
   export ZAI_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
 
 Examples:
-  ai-usage              # Check all tools (detailed)
-  ai-usage --claude     # Claude only
-  ai-usage --json       # JSON output
-  ai-usage --oneline    # Compact one-liner (5h window)
-  ai-usage --oneline 7d # Compact one-liner (7d window)
+  cclimits              # Check all tools (detailed)
+  cclimits --claude     # Claude only
+  cclimits --json       # JSON output
+  cclimits --oneline    # Compact one-liner (5h window)
+  cclimits --oneline 7d # Compact one-liner (7d window)
+
+Example Output:
+  # One-liner (5h window)
+  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ )
 """
 
     parser = argparse.ArgumentParser(
