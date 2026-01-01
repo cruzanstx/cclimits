@@ -100,13 +100,6 @@ git push --tags
 | Gemini | `cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` | `Bearer {oauth}` |
 | Z.AI | `api.z.ai/api/monitor/usage/quota/limit` | `Authorization: {api_key}` |
 
-## Related Projects
-
-- **daplug plugin**: `rogers_ai_rules/plugins/daplug/skills/ai-usage/`
-  - Bundles a copy of this script
-  - Keep in sync when making changes
-  - daplug version may diverge (has hardcoded OAuth for internal use)
-
 ## Testing Checklist
 
 Before publishing:
