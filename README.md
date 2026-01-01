@@ -1,12 +1,13 @@
 # cclimits
 
-Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, and Z.AI.
+Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI, and OpenRouter.
 
 ## Features
 
 - **Auto-discovers credentials** from standard locations
 - **Auto-refreshes expired tokens** (Gemini OAuth)
 - **Multiple output formats**: detailed, JSON, compact one-liner
+- **Caching support** for fast statusline integration
 - **Cross-platform**: macOS and Linux support
 
 ## Installation
@@ -44,9 +45,14 @@ cclimits --claude     # Claude only
 cclimits --codex      # Codex only
 cclimits --gemini     # Gemini only
 cclimits --zai        # Z.AI only
+cclimits --openrouter # OpenRouter only
 cclimits --json       # JSON output
 cclimits --oneline    # Compact one-liner (5h window)
 cclimits --oneline 7d # Compact one-liner (7d window)
+
+# Caching (for statusline integration)
+cclimits --oneline --cached        # Use cache if fresh (<60s)
+cclimits --oneline --cache-ttl 30  # Custom TTL in seconds
 ```
 
 ## Example Output
@@ -54,7 +60,7 @@ cclimits --oneline 7d # Compact one-liner (7d window)
 ### Compact One-liner (--oneline)
 
 ```
-Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ )
+Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅
 ```
 
 ### Detailed Output (default)
@@ -112,6 +118,14 @@ Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7%
     Used:      1%
     Remaining: 99%
     (10,000 / 1,000,000 tokens)
+
+==================================================
+  OpenRouter
+==================================================
+  ✅ Connected
+
+  Balance:     $47.91
+  Total Used:  $2.09
 ```
 
 ## Status Icons
@@ -133,6 +147,7 @@ Credentials are auto-discovered from these locations:
 | **Codex** | `~/.codex/auth.json` |
 | **Gemini** | `~/.gemini/oauth_creds.json` (auto-refreshes) |
 | **Z.AI** | `$ZAI_KEY` or `$ZAI_API_KEY` environment variable |
+| **OpenRouter** | `$OPENROUTER_API_KEY` environment variable |
 
 ## Setup (One-Time)
 
@@ -142,7 +157,8 @@ If credentials are missing, run the corresponding CLI tool to authenticate:
 claude           # Login to Claude Code
 codex login      # Login to OpenAI Codex
 gemini           # Login to Gemini CLI
-export ZAI_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
+export ZAI_KEY=your-key           # Add to ~/.zshrc or ~/.bashrc
+export OPENROUTER_API_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
 ```
 
 ### Gemini Token Refresh
