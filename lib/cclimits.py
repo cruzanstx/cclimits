@@ -803,15 +803,22 @@ def print_section(name: str, data: dict):
     if "gcp_project" in data:
         print(f"  📦 GCP Project: {data['gcp_project']}")
 
-    # Gemini model quotas
+    # Gemini tier quotas
     if "models" in data:
-        print(f"\n  Model Quotas:")
-        for model_id, model_data in data["models"].items():
-            used = model_data.get("used", "?")
-            remaining = model_data.get("remaining", "?")
-            reset = model_data.get("resets_in", "")
-            reset_str = f" (resets: {reset})" if reset else ""
-            print(f"    {model_id}: {used} used, {remaining} remaining{reset_str}")
+        print(f"\n  Quota by Tier:")
+        tier_order = ["3-Flash", "Flash", "Pro"]
+        for tier_name in tier_order:
+            tier_models = GEMINI_TIERS.get(tier_name, [])
+            for model_id in tier_models:
+                if model_id in data["models"]:
+                    model_data = data["models"][model_id]
+                    used = model_data.get("used", "?")
+                    remaining = model_data.get("remaining", "?")
+                    reset = model_data.get("resets_in", "")
+                    reset_str = f" (resets: {reset})" if reset else ""
+                    print(f"    {tier_name}: {used} used, {remaining} remaining{reset_str}")
+                    break  # Only need first model from each tier
+
 
     # Z.AI-specific
     if "token_quota" in data:
