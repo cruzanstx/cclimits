@@ -32,6 +32,59 @@ GEMINI_TIERS = {
     "Pro": ["gemini-2.5-pro", "gemini-3-pro-preview"],
 }
 
+# Cache configuration
+CACHE_DIR = Path.home() / ".cache" / "cclimits"
+CACHE_FILE = CACHE_DIR / "usage.json"
+DEFAULT_CACHE_TTL = 60  # seconds
+
+def get_cache_path() -> Path:
+    """Get cache file path, creating directory if needed"""
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError):
+        pass  # Silently fail if we can't create directory
+    return CACHE_FILE
+
+def read_cache(ttl: int) -> dict | None:
+    """Read cache if fresh (younger than TTL seconds), return None if stale/missing"""
+    try:
+        cache_file = get_cache_path()
+        if not cache_file.exists():
+            return None
+        
+        with open(cache_file, 'r') as f:
+            cache_data = json.load(f)
+        
+        # Check cache structure
+        if not isinstance(cache_data, dict) or "timestamp" not in cache_data or "data" not in cache_data:
+            return None
+        
+        # Check if cache is fresh
+        import time
+        cache_age = time.time() - cache_data["timestamp"]
+        if cache_age < ttl:
+            return cache_data["data"]
+        
+        return None
+    except (json.JSONDecodeError, KeyError, TypeError, OSError, PermissionError):
+        return None
+
+def write_cache(data: dict) -> bool:
+    """Write data to cache file, return success status"""
+    try:
+        cache_file = get_cache_path()
+        import time
+        cache_data = {
+            "timestamp": time.time(),
+            "data": data
+        }
+        with open(cache_file, 'w') as f:
+            json.dump(cache_data, f, indent=2)
+        return True
+    except (OSError, PermissionError, TypeError):
+        return False
+
+
 def http_get(url: str, headers: dict) -> tuple[int, dict | str]:
     """Make HTTP GET request, return (status_code, response_data)"""
     if HAS_REQUESTS:
@@ -979,21 +1032,41 @@ Examples:
     parser.add_argument("--codex", action="store_true", help="Only check Codex")
     parser.add_argument("--gemini", action="store_true", help="Only check Gemini")
     parser.add_argument("--zai", action="store_true", help="Only check Z.AI")
+    parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
+    parser.add_argument("--cache-ttl", type=int, metavar="SECONDS",
+                        help="Override default TTL (default: 60, implies --cached)")
     args = parser.parse_args()
+
+    # Determine cache settings
+    use_cache = args.cached or args.cache_ttl is not None
+    cache_ttl = args.cache_ttl if args.cache_ttl is not None else DEFAULT_CACHE_TTL
+
+    # Try to read from cache if caching is enabled
+    results = None
+    if use_cache:
+        cached_results = read_cache(cache_ttl)
+        if cached_results is not None:
+            results = cached_results
 
     # If no specific tool selected, check all
     check_all = not (args.claude or args.codex or args.gemini or args.zai)
 
-    results = {}
+    skip_fetch = results is not None
+    if not skip_fetch:
+        results = {}
 
-    if check_all or args.claude:
+    if not skip_fetch and (check_all or args.claude):
         results["claude"] = get_claude_usage()
-    if check_all or args.codex:
+    if not skip_fetch and (check_all or args.codex):
         results["codex"] = get_codex_usage()
-    if check_all or args.gemini:
+    if not skip_fetch and (check_all or args.gemini):
         results["gemini"] = get_gemini_usage()
-    if check_all or args.zai:
+    if not skip_fetch and (check_all or args.zai):
         results["zai"] = get_zai_usage()
+
+    # Always write cache for future --cached calls
+    if not skip_fetch:
+        write_cache(results)
 
     if args.json:
         print(json.dumps(results, indent=2))
