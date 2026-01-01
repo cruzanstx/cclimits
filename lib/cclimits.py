@@ -32,6 +32,51 @@ GEMINI_TIERS = {
     "Pro": ["gemini-2.5-pro", "gemini-3-pro-preview"],
 }
 
+### OpenRouter Functions
+
+def get_openrouter_credentials() -> str | None:
+    """Get OpenRouter API key from environment variables"""
+    for var in ["OPENROUTER_API_KEY", "OPENROUTER_KEY"]:
+        if key := os.environ.get(var):
+            return key
+    return None
+
+
+def get_openrouter_usage() -> dict:
+    """Fetch OpenRouter account balance/credits"""
+    key = get_openrouter_credentials()
+    if not key:
+        return {
+            "error": "No credentials found",
+            "hint": "Set OPENROUTER_API_KEY environment variable"
+        }
+
+    headers = {"Authorization": f"Bearer {key}"}
+    status, data = http_get("https://openrouter.ai/api/v1/credits", headers)
+
+    if status == 200 and isinstance(data, dict) and "data" in data:
+        credits_data = data["data"]
+        total_credits = float(credits_data.get("total_credits", 0))
+        total_usage = float(credits_data.get("total_usage", 0))
+        balance = total_credits - total_usage
+
+        result = {
+            "status": "ok",
+            "balance_usd": balance,
+            "total_credits_usd": total_credits,
+            "total_usage_usd": total_usage,
+            "dashboard_url": "https://openrouter.ai/credits"
+        }
+        return result
+    elif status == 401:
+        return {"error": "Invalid API key", "hint": "Check OPENROUTER_API_KEY"}
+    elif status == 403:
+        return {"error": "Forbidden", "hint": "Account may be suspended"}
+    else:
+        error_msg = data if isinstance(data, str) else str(data)
+        return {"error": f"API error ({status})", "hint": error_msg}
+
+
 def http_get(url: str, headers: dict) -> tuple[int, dict | str]:
     """Make HTTP GET request, return (status_code, response_data)"""
     if HAS_REQUESTS:
@@ -840,6 +885,19 @@ def print_section(name: str, data: dict):
         print(f"    API Calls: {wu['calls']:,}")
         print(f"    Tokens:    {wu['tokens']:,}")
 
+
+    # OpenRouter-specific
+    if "balance_usd" in data:
+        balance = data["balance_usd"]
+        total_credits = data.get("total_credits_usd", 0)
+        total_usage = data.get("total_usage_usd", 0)
+        print(f"\n  Balance:")
+        print(f"    Current:   ${balance:.2f}")
+        print(f"    Purchased: ${total_credits:.2f}")
+        print(f"    Used:      ${total_usage:.2f}")
+    if "dashboard_url" in data:
+        print(f"  🔗 {data['dashboard_url']}")
+
     # General info
     if "source" in data:
         print(f"  📡 Source: {data['source']}")
@@ -939,6 +997,25 @@ def print_oneline(results: dict, window: str = "5h"):
         elif "error" in data:
             parts.append("Gemini: ❌")
 
+
+    # OpenRouter
+    if "openrouter" in results:
+        data = results["openrouter"]
+        if data.get("status") == "ok" and "balance_usd" in data:
+            balance = data["balance_usd"]
+            # Status thresholds: >$5 ✅, $1-5 ⚠️, <$1 🔴, $0 ❌
+            if balance <= 0:
+                status_icon = "❌"
+            elif balance < 1.0:
+                status_icon = "🔴"
+            elif balance < 5.0:
+                status_icon = "⚠️"
+            else:
+                status_icon = "✅"
+            parts.append(f"OpenRouter: ${balance:.2f} {status_icon}")
+        elif "error" in data:
+            parts.append("OpenRouter: ❌")
+
     print(" | ".join(parts))
 
 
@@ -947,11 +1024,12 @@ def main():
 
     epilog = """
 Credential Locations (auto-discovered):
-  Claude    ~/.claude/.credentials.json (Linux)
-            macOS Keychain "Claude Code-credentials" (macOS)
-  Codex     ~/.codex/auth.json
-  Gemini    ~/.gemini/oauth_creds.json (auto-refreshes expired tokens)
-  Z.AI      $ZAI_KEY or $ZAI_API_KEY environment variable
+  Claude     ~/.claude/.credentials.json (Linux)
+              macOS Keychain "Claude Code-credentials" (macOS)
+  Codex      ~/.codex/auth.json
+  Gemini     ~/.gemini/oauth_creds.json (auto-refreshes expired tokens)
+  Z.AI       $ZAI_KEY or $ZAI_API_KEY environment variable
+  OpenRouter $OPENROUTER_API_KEY environment variable
 
 Setup (one-time):
   claude           # Login to Claude Code
@@ -968,7 +1046,7 @@ Examples:
 """
 
     parser = argparse.ArgumentParser(
-        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI",
+        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI, OpenRouter",
         epilog=epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -979,10 +1057,11 @@ Examples:
     parser.add_argument("--codex", action="store_true", help="Only check Codex")
     parser.add_argument("--gemini", action="store_true", help="Only check Gemini")
     parser.add_argument("--zai", action="store_true", help="Only check Z.AI")
+    parser.add_argument("--openrouter", action="store_true", help="Only check OpenRouter")
     args = parser.parse_args()
 
     # If no specific tool selected, check all
-    check_all = not (args.claude or args.codex or args.gemini or args.zai)
+    check_all = not (args.claude or args.codex or args.gemini or args.zai or args.openrouter)
 
     results = {}
 
@@ -994,6 +1073,8 @@ Examples:
         results["gemini"] = get_gemini_usage()
     if check_all or args.zai:
         results["zai"] = get_zai_usage()
+    if check_all or args.openrouter:
+        results["openrouter"] = get_openrouter_usage()
 
     if args.json:
         print(json.dumps(results, indent=2))
@@ -1012,6 +1093,8 @@ Examples:
             print_section("Gemini CLI", results["gemini"])
         if "zai" in results:
             print_section("Z.AI (GLM-4)", results["zai"])
+        if "openrouter" in results:
+            print_section("OpenRouter", results["openrouter"])
 
         print("\n" + "="*50)
         print("  Done!")
