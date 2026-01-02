@@ -47,8 +47,9 @@ cclimits --gemini     # Gemini only
 cclimits --zai        # Z.AI only
 cclimits --openrouter # OpenRouter only
 cclimits --json       # JSON output
-cclimits --oneline    # Compact one-liner (5h window)
-cclimits --oneline 7d # Compact one-liner (7d window)
+cclimits --oneline      # Compact one-liner (5h window)
+cclimits --oneline 7d   # Compact one-liner (7d window)
+cclimits --oneline both # Compact one-liner (5h/7d combined)
 
 # Caching (for statusline integration)
 cclimits --oneline --cached        # Use cache if fresh (<60s)
@@ -59,8 +60,12 @@ cclimits --oneline --cache-ttl 30  # Custom TTL in seconds
 
 ### Compact One-liner (--oneline)
 
-```
+```bash
+# Single window (5h or 7d)
 Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅
+
+# Both windows (--oneline both) - shows 5h/7d combined
+Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1% ✅ | OpenRouter: $47.91 ✅
 ```
 
 ### Detailed Output (default)

@@ -1001,7 +1001,12 @@ def print_oneline(results: dict, window: str = "5h"):
     if "claude" in results:
         data = results["claude"]
         if data.get("status") == "ok" or "five_hour" in data:
-            if window == "5h" and "five_hour" in data:
+            if window == "both" and "five_hour" in data and "seven_day" in data:
+                pct_5h = data["five_hour"]["used"].rstrip("%")
+                pct_7d = data["seven_day"]["used"].rstrip("%")
+                max_pct = max(float(pct_5h), float(pct_7d))
+                parts.append(f"Claude: {pct_5h}%/{pct_7d}% {get_status_icon(max_pct)}")
+            elif window == "5h" and "five_hour" in data:
                 pct_str = data["five_hour"]["used"]
                 pct = float(pct_str.rstrip("%"))
                 parts.append(f"Claude: {pct_str} (5h) {get_status_icon(pct)}")
@@ -1016,7 +1021,12 @@ def print_oneline(results: dict, window: str = "5h"):
     if "codex" in results:
         data = results["codex"]
         if data.get("status") == "ok":
-            if window == "5h" and "primary_window" in data:
+            if window == "both" and "primary_window" in data and "secondary_window" in data:
+                pct_5h = data["primary_window"]["used"].rstrip("%")
+                pct_7d = data["secondary_window"]["used"].rstrip("%")
+                max_pct = max(float(pct_5h), float(pct_7d))
+                parts.append(f"Codex: {pct_5h}%/{pct_7d}% {get_status_icon(max_pct)}")
+            elif window == "5h" and "primary_window" in data:
                 pct_str = data["primary_window"]["used"]
                 pct = float(pct_str.rstrip("%"))
                 parts.append(f"Codex: {pct_str} (5h) {get_status_icon(pct)}")
@@ -1101,8 +1111,9 @@ Examples:
   cclimits              # Check all tools (detailed)
   cclimits --claude     # Claude only
   cclimits --json       # JSON output
-  cclimits --oneline    # Compact one-liner (5h window)
-  cclimits --oneline 7d # Compact one-liner (7d window)
+  cclimits --oneline      # Compact one-liner (5h window)
+  cclimits --oneline 7d   # Compact one-liner (7d window)
+  cclimits --oneline both # Compact one-liner (5h/7d window)
 
 Example Output:
   # One-liner (5h window)
@@ -1116,7 +1127,7 @@ Example Output:
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--oneline", nargs="?", const="5h", metavar="WINDOW",
-                        help="Compact one-liner output (5h or 7d, default: 5h)")
+                        help="Compact one-liner output (5h, 7d, or both; default: 5h)")
     parser.add_argument("--claude", action="store_true", help="Only check Claude Code")
     parser.add_argument("--codex", action="store_true", help="Only check Codex")
     parser.add_argument("--gemini", action="store_true", help="Only check Gemini")
@@ -1163,7 +1174,7 @@ Example Output:
     if args.json:
         print(json.dumps(results, indent=2))
     elif args.oneline:
-        window = args.oneline if args.oneline in ("5h", "7d") else "5h"
+        window = args.oneline if args.oneline in ("5h", "7d", "both") else "5h"
         print_oneline(results, window)
     else:
         print("\n🔍 AI CLI Usage Checker")
