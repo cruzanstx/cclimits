@@ -989,18 +989,26 @@ def print_section(name: str, data: dict):
         print(f"  🔄 {data['hint_refresh']}")
 
 
-def get_status_icon(pct: float, use_color: bool = False) -> str:
-    """Get status icon based on usage percentage"""
-    if use_color:
-        if pct >= 100:
-            return f"{COLORS['bold_red']}[FAIL]{COLORS['reset']}"
-        elif pct >= 90:
-            return f"{COLORS['red']}[HIGH]{COLORS['reset']}"
-        elif pct >= 70:
-            return f"{COLORS['yellow']}[WARN]{COLORS['reset']}"
-        else:
-            return f"{COLORS['green']}[OK]{COLORS['reset']}"
+def get_color_for_pct(pct: float) -> str:
+    """Get ANSI color code based on usage percentage"""
+    if pct >= 100:
+        return COLORS['bold_red']
+    elif pct >= 90:
+        return COLORS['red']
+    elif pct >= 70:
+        return COLORS['yellow']
+    else:
+        return COLORS['green']
 
+
+def colorize_pct(pct_str: str, pct: float) -> str:
+    """Wrap percentage string in appropriate color"""
+    color = get_color_for_pct(pct)
+    return f"{color}{pct_str}{COLORS['reset']}"
+
+
+def get_status_icon(pct: float) -> str:
+    """Get status emoji based on usage percentage"""
     if pct >= 100:
         return "❌"
     elif pct >= 90:
@@ -1014,7 +1022,7 @@ def get_status_icon(pct: float, use_color: bool = False) -> str:
 def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
     """Print compact one-liner output"""
     parts = []
-    error_icon = get_status_icon(100, use_color=use_color)
+    error_icon = f"{COLORS['bold_red']}ERR{COLORS['reset']}" if use_color else "❌"
 
     # Claude
     if "claude" in results:
@@ -1024,15 +1032,25 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                 pct_5h = data["five_hour"]["used"].rstrip("%")
                 pct_7d = data["seven_day"]["used"].rstrip("%")
                 max_pct = max(float(pct_5h), float(pct_7d))
-                parts.append(f"Claude: {pct_5h}%/{pct_7d}% {get_status_icon(max_pct, use_color=use_color)}")
+                pct_display = f"{pct_5h}%/{pct_7d}%"
+                if use_color:
+                    parts.append(f"Claude: {colorize_pct(pct_display, max_pct)}")
+                else:
+                    parts.append(f"Claude: {pct_display} {get_status_icon(max_pct)}")
             elif window == "5h" and "five_hour" in data:
                 pct_str = data["five_hour"]["used"]
                 pct = float(pct_str.rstrip("%"))
-                parts.append(f"Claude: {pct_str} (5h) {get_status_icon(pct, use_color=use_color)}")
+                if use_color:
+                    parts.append(f"Claude: {colorize_pct(pct_str, pct)} (5h)")
+                else:
+                    parts.append(f"Claude: {pct_str} (5h) {get_status_icon(pct)}")
             elif window == "7d" and "seven_day" in data:
                 pct_str = data["seven_day"]["used"]
                 pct = float(pct_str.rstrip("%"))
-                parts.append(f"Claude: {pct_str} (7d) {get_status_icon(pct, use_color=use_color)}")
+                if use_color:
+                    parts.append(f"Claude: {colorize_pct(pct_str, pct)} (7d)")
+                else:
+                    parts.append(f"Claude: {pct_str} (7d) {get_status_icon(pct)}")
         elif "error" in data:
             parts.append(f"Claude: {error_icon}")
 
@@ -1044,15 +1062,25 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                 pct_5h = data["primary_window"]["used"].rstrip("%")
                 pct_7d = data["secondary_window"]["used"].rstrip("%")
                 max_pct = max(float(pct_5h), float(pct_7d))
-                parts.append(f"Codex: {pct_5h}%/{pct_7d}% {get_status_icon(max_pct, use_color=use_color)}")
+                pct_display = f"{pct_5h}%/{pct_7d}%"
+                if use_color:
+                    parts.append(f"Codex: {colorize_pct(pct_display, max_pct)}")
+                else:
+                    parts.append(f"Codex: {pct_display} {get_status_icon(max_pct)}")
             elif window == "5h" and "primary_window" in data:
                 pct_str = data["primary_window"]["used"]
                 pct = float(pct_str.rstrip("%"))
-                parts.append(f"Codex: {pct_str} (5h) {get_status_icon(pct, use_color=use_color)}")
+                if use_color:
+                    parts.append(f"Codex: {colorize_pct(pct_str, pct)} (5h)")
+                else:
+                    parts.append(f"Codex: {pct_str} (5h) {get_status_icon(pct)}")
             elif window == "7d" and "secondary_window" in data:
                 pct_str = data["secondary_window"]["used"]
                 pct = float(pct_str.rstrip("%"))
-                parts.append(f"Codex: {pct_str} (7d) {get_status_icon(pct, use_color=use_color)}")
+                if use_color:
+                    parts.append(f"Codex: {colorize_pct(pct_str, pct)} (7d)")
+                else:
+                    parts.append(f"Codex: {pct_str} (7d) {get_status_icon(pct)}")
         elif "error" in data:
             parts.append(f"Codex: {error_icon}")
 
@@ -1061,7 +1089,11 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
         data = results["zai"]
         if data.get("status") == "ok" and "token_quota" in data:
             pct = data["token_quota"].get("percentage", 0)
-            parts.append(f"Z.AI: {pct}% {get_status_icon(pct, use_color=use_color)}")
+            pct_str = f"{pct}%"
+            if use_color:
+                parts.append(f"Z.AI: {colorize_pct(pct_str, pct)}")
+            else:
+                parts.append(f"Z.AI: {pct_str} {get_status_icon(pct)}")
         elif "error" in data:
             parts.append(f"Z.AI: {error_icon}")
 
@@ -1079,7 +1111,10 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                     if model_id in data["models"]:
                         pct_str = data["models"][model_id]["used"]
                         pct = float(pct_str.rstrip("%"))
-                        gemini_parts.append(f"{tier_name} {pct_str} {get_status_icon(pct, use_color=use_color)}")
+                        if use_color:
+                            gemini_parts.append(f"{tier_name} {colorize_pct(pct_str, pct)}")
+                        else:
+                            gemini_parts.append(f"{tier_name} {pct_str} {get_status_icon(pct)}")
                         break  # Only show once per tier
             if gemini_parts:
                 parts.append(f"Gemini: ( {' | '.join(gemini_parts)} )")
@@ -1092,16 +1127,18 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
         data = results["openrouter"]
         if data.get("status") == "ok" and "balance_usd" in data:
             balance = data["balance_usd"]
+            balance_str = f"${balance:.2f}"
             # Status thresholds: >$5 ✅, $1-5 ⚠️, <$1 🔴, $0 ❌
             if use_color:
                 if balance <= 0:
-                    status_icon = f"{COLORS['bold_red']}[FAIL]{COLORS['reset']}"
+                    color = COLORS['bold_red']
                 elif balance < 1.0:
-                    status_icon = f"{COLORS['red']}[HIGH]{COLORS['reset']}"
+                    color = COLORS['red']
                 elif balance < 5.0:
-                    status_icon = f"{COLORS['yellow']}[WARN]{COLORS['reset']}"
+                    color = COLORS['yellow']
                 else:
-                    status_icon = f"{COLORS['green']}[OK]{COLORS['reset']}"
+                    color = COLORS['green']
+                parts.append(f"OpenRouter: {color}{balance_str}{COLORS['reset']}")
             else:
                 if balance <= 0:
                     status_icon = "❌"
@@ -1111,7 +1148,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                     status_icon = "⚠️"
                 else:
                     status_icon = "✅"
-            parts.append(f"OpenRouter: ${balance:.2f} {status_icon}")
+                parts.append(f"OpenRouter: {balance_str} {status_icon}")
         elif "error" in data:
             parts.append(f"OpenRouter: {error_icon}")
 

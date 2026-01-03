@@ -68,8 +68,8 @@ Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7%
 # Both windows (--oneline both) - shows 5h/7d combined
 Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1% ✅ | OpenRouter: $47.91 ✅
 
-# No emoji mode (--noemoji) - uses colored text: [OK] [WARN] [HIGH] [FAIL]
-Claude: 4.0% (5h) [OK] | Codex: 0% (5h) [OK] | Z.AI: 1% [OK] | OpenRouter: $47.91 [OK]
+# No emoji mode (--noemoji) - colorizes percentages directly (green/yellow/red)
+Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% | OpenRouter: $47.91
 ```
 
 ### Detailed Output (default)
