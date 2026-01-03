@@ -47,9 +47,10 @@ cclimits --gemini     # Gemini only
 cclimits --zai        # Z.AI only
 cclimits --openrouter # OpenRouter only
 cclimits --json       # JSON output
-cclimits --oneline      # Compact one-liner (5h window)
-cclimits --oneline 7d   # Compact one-liner (7d window)
-cclimits --oneline both # Compact one-liner (5h/7d combined)
+cclimits --oneline           # Compact one-liner (5h window)
+cclimits --oneline 7d        # Compact one-liner (7d window)
+cclimits --oneline both      # Compact one-liner (5h/7d combined)
+cclimits --oneline --noemoji # Color-coded text instead of emojis
 
 # Caching (for statusline integration)
 cclimits --oneline --cached        # Use cache if fresh (<60s)
@@ -66,6 +67,9 @@ Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7%
 
 # Both windows (--oneline both) - shows 5h/7d combined
 Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1% ✅ | OpenRouter: $47.91 ✅
+
+# No emoji mode (--noemoji) - uses colored text: [OK] [WARN] [HIGH] [FAIL]
+Claude: 4.0% (5h) [OK] | Codex: 0% (5h) [OK] | Z.AI: 1% [OK] | OpenRouter: $47.91 [OK]
 ```
 
 ### Detailed Output (default)

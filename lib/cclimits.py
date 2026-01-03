@@ -32,6 +32,14 @@ GEMINI_TIERS = {
     "Pro": ["gemini-2.5-pro", "gemini-3-pro-preview"],
 }
 
+COLORS = {
+    'green': '\033[32m',
+    'yellow': '\033[33m',
+    'red': '\033[31m',
+    'bold_red': '\033[1;31m',
+    'reset': '\033[0m'
+}
+
 # Cache configuration
 CACHE_DIR = Path.home() / ".cache" / "cclimits"
 CACHE_FILE = CACHE_DIR / "usage.json"
@@ -981,8 +989,18 @@ def print_section(name: str, data: dict):
         print(f"  🔄 {data['hint_refresh']}")
 
 
-def get_status_icon(pct: float) -> str:
+def get_status_icon(pct: float, use_color: bool = False) -> str:
     """Get status icon based on usage percentage"""
+    if use_color:
+        if pct >= 100:
+            return f"{COLORS['bold_red']}[FAIL]{COLORS['reset']}"
+        elif pct >= 90:
+            return f"{COLORS['red']}[HIGH]{COLORS['reset']}"
+        elif pct >= 70:
+            return f"{COLORS['yellow']}[WARN]{COLORS['reset']}"
+        else:
+            return f"{COLORS['green']}[OK]{COLORS['reset']}"
+
     if pct >= 100:
         return "❌"
     elif pct >= 90:
@@ -993,9 +1011,10 @@ def get_status_icon(pct: float) -> str:
         return "✅"
 
 
-def print_oneline(results: dict, window: str = "5h"):
+def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
     """Print compact one-liner output"""
     parts = []
+    error_icon = get_status_icon(100, use_color=use_color)
 
     # Claude
     if "claude" in results:
@@ -1005,17 +1024,17 @@ def print_oneline(results: dict, window: str = "5h"):
                 pct_5h = data["five_hour"]["used"].rstrip("%")
                 pct_7d = data["seven_day"]["used"].rstrip("%")
                 max_pct = max(float(pct_5h), float(pct_7d))
-                parts.append(f"Claude: {pct_5h}%/{pct_7d}% {get_status_icon(max_pct)}")
+                parts.append(f"Claude: {pct_5h}%/{pct_7d}% {get_status_icon(max_pct, use_color=use_color)}")
             elif window == "5h" and "five_hour" in data:
                 pct_str = data["five_hour"]["used"]
                 pct = float(pct_str.rstrip("%"))
-                parts.append(f"Claude: {pct_str} (5h) {get_status_icon(pct)}")
+                parts.append(f"Claude: {pct_str} (5h) {get_status_icon(pct, use_color=use_color)}")
             elif window == "7d" and "seven_day" in data:
                 pct_str = data["seven_day"]["used"]
                 pct = float(pct_str.rstrip("%"))
-                parts.append(f"Claude: {pct_str} (7d) {get_status_icon(pct)}")
+                parts.append(f"Claude: {pct_str} (7d) {get_status_icon(pct, use_color=use_color)}")
         elif "error" in data:
-            parts.append("Claude: ❌")
+            parts.append(f"Claude: {error_icon}")
 
     # Codex
     if "codex" in results:
@@ -1025,26 +1044,26 @@ def print_oneline(results: dict, window: str = "5h"):
                 pct_5h = data["primary_window"]["used"].rstrip("%")
                 pct_7d = data["secondary_window"]["used"].rstrip("%")
                 max_pct = max(float(pct_5h), float(pct_7d))
-                parts.append(f"Codex: {pct_5h}%/{pct_7d}% {get_status_icon(max_pct)}")
+                parts.append(f"Codex: {pct_5h}%/{pct_7d}% {get_status_icon(max_pct, use_color=use_color)}")
             elif window == "5h" and "primary_window" in data:
                 pct_str = data["primary_window"]["used"]
                 pct = float(pct_str.rstrip("%"))
-                parts.append(f"Codex: {pct_str} (5h) {get_status_icon(pct)}")
+                parts.append(f"Codex: {pct_str} (5h) {get_status_icon(pct, use_color=use_color)}")
             elif window == "7d" and "secondary_window" in data:
                 pct_str = data["secondary_window"]["used"]
                 pct = float(pct_str.rstrip("%"))
-                parts.append(f"Codex: {pct_str} (7d) {get_status_icon(pct)}")
+                parts.append(f"Codex: {pct_str} (7d) {get_status_icon(pct, use_color=use_color)}")
         elif "error" in data:
-            parts.append("Codex: ❌")
+            parts.append(f"Codex: {error_icon}")
 
     # Z.AI
     if "zai" in results:
         data = results["zai"]
         if data.get("status") == "ok" and "token_quota" in data:
             pct = data["token_quota"].get("percentage", 0)
-            parts.append(f"Z.AI: {pct}% {get_status_icon(pct)}")
+            parts.append(f"Z.AI: {pct}% {get_status_icon(pct, use_color=use_color)}")
         elif "error" in data:
-            parts.append("Z.AI: ❌")
+            parts.append(f"Z.AI: {error_icon}")
 
     # Gemini (group by quota tier)
     if "gemini" in results:
@@ -1060,12 +1079,12 @@ def print_oneline(results: dict, window: str = "5h"):
                     if model_id in data["models"]:
                         pct_str = data["models"][model_id]["used"]
                         pct = float(pct_str.rstrip("%"))
-                        gemini_parts.append(f"{tier_name} {pct_str} {get_status_icon(pct)}")
+                        gemini_parts.append(f"{tier_name} {pct_str} {get_status_icon(pct, use_color=use_color)}")
                         break  # Only show once per tier
             if gemini_parts:
                 parts.append(f"Gemini: ( {' | '.join(gemini_parts)} )")
         elif "error" in data:
-            parts.append("Gemini: ❌")
+            parts.append(f"Gemini: {error_icon}")
 
 
     # OpenRouter
@@ -1074,17 +1093,27 @@ def print_oneline(results: dict, window: str = "5h"):
         if data.get("status") == "ok" and "balance_usd" in data:
             balance = data["balance_usd"]
             # Status thresholds: >$5 ✅, $1-5 ⚠️, <$1 🔴, $0 ❌
-            if balance <= 0:
-                status_icon = "❌"
-            elif balance < 1.0:
-                status_icon = "🔴"
-            elif balance < 5.0:
-                status_icon = "⚠️"
+            if use_color:
+                if balance <= 0:
+                    status_icon = f"{COLORS['bold_red']}[FAIL]{COLORS['reset']}"
+                elif balance < 1.0:
+                    status_icon = f"{COLORS['red']}[HIGH]{COLORS['reset']}"
+                elif balance < 5.0:
+                    status_icon = f"{COLORS['yellow']}[WARN]{COLORS['reset']}"
+                else:
+                    status_icon = f"{COLORS['green']}[OK]{COLORS['reset']}"
             else:
-                status_icon = "✅"
+                if balance <= 0:
+                    status_icon = "❌"
+                elif balance < 1.0:
+                    status_icon = "🔴"
+                elif balance < 5.0:
+                    status_icon = "⚠️"
+                else:
+                    status_icon = "✅"
             parts.append(f"OpenRouter: ${balance:.2f} {status_icon}")
         elif "error" in data:
-            parts.append("OpenRouter: ❌")
+            parts.append(f"OpenRouter: {error_icon}")
 
     print(" | ".join(parts))
 
@@ -1128,6 +1157,8 @@ Example Output:
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--oneline", nargs="?", const="5h", metavar="WINDOW",
                         help="Compact one-liner output (5h, 7d, or both; default: 5h)")
+    parser.add_argument("--noemoji", action="store_true",
+                        help="Use colored text instead of emojis (for terminals without emoji support)")
     parser.add_argument("--claude", action="store_true", help="Only check Claude Code")
     parser.add_argument("--codex", action="store_true", help="Only check Codex")
     parser.add_argument("--gemini", action="store_true", help="Only check Gemini")
@@ -1175,7 +1206,7 @@ Example Output:
         print(json.dumps(results, indent=2))
     elif args.oneline:
         window = args.oneline if args.oneline in ("5h", "7d", "both") else "5h"
-        print_oneline(results, window)
+        print_oneline(results, window, use_color=args.noemoji)
     else:
         print("\n🔍 AI CLI Usage Checker")
         print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
