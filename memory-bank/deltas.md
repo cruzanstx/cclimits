@@ -1,12 +1,15 @@
 # Recent Deltas (Last 3-5 Changes)
 
-## 2026-01-11: Z.AI 5h Window Indicator (v1.2.5)
+## 2026-01-11: Z.AI 5h + Gemini Token Persistence (v1.2.5-1.2.7)
 
 - Added `(5h)` indicator to Z.AI quota in oneline output
 - Updated verbose section header to "Z.AI (5h shared - GLM-4.x)"
 - Z.AI quota is shared across GLM-4.7, GLM-4.6, GLM-4.5V, GLM-4.5, GLM-4.5-Air, and Visual Analysis
+- Fixed Gemini OAuth token persistence with atomic writes (temp file + rename)
+- Added `.npmignore` and fixed `package.json` to exclude `__pycache__` (package size: 64KB → 15KB)
+- Updated README examples to reflect Z.AI 5h window
 
-**Files:** `lib/cclimits.py`, `CLAUDE.md`
+**Files:** `lib/cclimits.py`, `CLAUDE.md`, `README.md`, `package.json`, `.npmignore`
 
 ## 2026-01-10: Oneline Both Mode + Noemoji Flag (v1.2.3-1.2.4)
 

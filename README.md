@@ -5,7 +5,7 @@ Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gem
 ## Features
 
 - **Auto-discovers credentials** from standard locations
-- **Auto-refreshes expired tokens** (Gemini OAuth)
+- **Auto-refreshes expired tokens** (Gemini OAuth) and persists them
 - **Multiple output formats**: detailed, JSON, compact one-liner
 - **Caching support** for fast statusline integration
 - **Cross-platform**: macOS and Linux support
@@ -63,13 +63,13 @@ cclimits --oneline --cache-ttl 30  # Custom TTL in seconds
 
 ```bash
 # Single window (5h or 7d)
-Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅
+Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅
 
 # Both windows (--oneline both) - shows 5h/7d combined
-Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1% ✅ | OpenRouter: $47.91 ✅
+Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1% (5h) ✅ | OpenRouter: $47.91 ✅
 
 # No emoji mode (--noemoji) - colorizes percentages directly (green/yellow/red)
-Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% | OpenRouter: $47.91
+Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91
 ```
 
 ### Detailed Output (default)
@@ -119,13 +119,14 @@ Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% | OpenRouter: $47.91
     Pro: 10.0% used, 90.0% remaining
 
 ==================================================
-  Z.AI (GLM-4)
+  Z.AI (5h shared - GLM-4.x)
 ==================================================
   ✅ Connected
 
-  Token Quota:
+  Token Quota (5h window):
     Used:      1%
     Remaining: 99%
+    Resets in: 4h 30m
     (10,000 / 1,000,000 tokens)
 
 ==================================================
