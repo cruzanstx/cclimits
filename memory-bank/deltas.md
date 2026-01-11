@@ -1,6 +1,20 @@
 # Recent Deltas (Last 3-5 Changes)
 
-## 2026-01-11: Z.AI 5h + Gemini Token Persistence (v1.2.5-1.2.7)
+## 2026-01-11: Provider Research + Implementation Prompts
+
+- Completed research on 8+ AI coding providers (`research/ai-coding-providers.md`)
+- Created 5 implementation prompts in `prompts/providers/`:
+  - 011: GitHub Copilot (high feasibility - `gh` CLI)
+  - 012: Cursor (medium - internal API discovery needed)
+  - 013: Replit (high - GraphQL credits API)
+  - 014: Windsurf/Codeium (medium - config discovery)
+  - 015: Amazon Q (medium - AWS CLI research needed)
+- Top candidates: Replit (clearest API), GitHub Copilot (largest user base)
+- BYOK tools (Aider, Continue) already covered via existing provider keys
+
+**Files:** `research/ai-coding-providers.md`, `prompts/providers/011-015*.md`
+
+## 2026-01-11: Z.AI 5h + Gemini Token Persistence (v1.2.5-1.2.8)
 
 - Added `(5h)` indicator to Z.AI quota in oneline output
 - Updated verbose section header to "Z.AI (5h shared - GLM-4.x)"
