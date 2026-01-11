@@ -437,6 +437,20 @@ def get_codex_usage() -> dict:
     }
 
 
+def _extract_oauth_from_file(path: Path) -> tuple[str, str] | None:
+    """Extract CLIENT_ID and CLIENT_SECRET from oauth2.js file"""
+    try:
+        content = path.read_text()
+        import re
+        id_match = re.search(r'CLIENT_ID\s*=\s*["\']([^"\']+)["\']', content)
+        secret_match = re.search(r'CLIENT_SECRET\s*=\s*["\']([^"\']+)["\']', content)
+        if id_match and secret_match:
+            return id_match.group(1), secret_match.group(1)
+    except:
+        pass
+    return None
+
+
 def get_gemini_oauth_creds() -> tuple[str, str] | None:
     """
     Get Gemini OAuth client credentials.
@@ -449,25 +463,82 @@ def get_gemini_oauth_creds() -> tuple[str, str] | None:
     if client_id and client_secret:
         return client_id, client_secret
 
-    # Try to extract from Gemini CLI installation
-    gemini_paths = [
-        Path.home() / ".npm" / "_npx" / "*" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js",
-        Path("/usr/local/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js"),
+    import glob
+
+    # Method 1: Find via `which gemini` and resolve to installation
+    try:
+        proc = subprocess.run(
+            ["which", "gemini"],
+            capture_output=True, text=True, timeout=5
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            gemini_bin = Path(proc.stdout.strip())
+            # Resolve symlinks to get actual installation path
+            resolved = gemini_bin.resolve()
+            # Navigate up to find node_modules, then down to oauth2.js
+            # Typical structure: .../node_modules/@google/gemini-cli/bin/cli.js
+            #                 or .../node_modules/.bin/gemini -> ../gemini-cli/...
+            current = resolved.parent
+            for _ in range(10):  # Walk up max 10 levels
+                # Check if we're in a node_modules structure
+                oauth_path = current / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js"
+                if oauth_path.exists():
+                    if result := _extract_oauth_from_file(oauth_path):
+                        return result
+                # Also check if gemini-cli has it nested
+                oauth_path2 = current / "node_modules" / "@google" / "gemini-cli" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js"
+                if oauth_path2.exists():
+                    if result := _extract_oauth_from_file(oauth_path2):
+                        return result
+                # Move up one directory
+                parent = current.parent
+                if parent == current:
+                    break
+                current = parent
+    except:
+        pass
+
+    # Method 2: Use npm root -g to find global node_modules
+    try:
+        proc = subprocess.run(
+            ["npm", "root", "-g"],
+            capture_output=True, text=True, timeout=10
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            npm_global = Path(proc.stdout.strip())
+            for oauth_path in [
+                npm_global / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js",
+                npm_global / "@google" / "gemini-cli" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js",
+            ]:
+                if oauth_path.exists():
+                    if result := _extract_oauth_from_file(oauth_path):
+                        return result
+    except:
+        pass
+
+    # Method 3: Fallback to common paths with globs
+    fallback_patterns = [
+        # npx cache
+        str(Path.home() / ".npm" / "_npx" / "*" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js"),
+        str(Path.home() / ".npm" / "_npx" / "*" / "node_modules" / "@google" / "gemini-cli" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js"),
+        # nvm
+        str(Path.home() / ".nvm" / "versions" / "node" / "*" / "lib" / "node_modules" / "@google" / "gemini-cli" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js"),
+        str(Path.home() / ".nvm" / "versions" / "node" / "*" / "lib" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js"),
+        # Global installs
+        "/usr/local/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
+        "/usr/local/lib/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
+        # Homebrew (macOS)
+        "/opt/homebrew/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
+        # Yarn global
+        str(Path.home() / ".config" / "yarn" / "global" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js"),
+        # pnpm global
+        str(Path.home() / ".local" / "share" / "pnpm" / "global" / "*" / "node_modules" / "@google" / "gemini-cli-core" / "dist" / "src" / "code_assist" / "oauth2.js"),
     ]
 
-    import glob
-    for pattern in gemini_paths:
-        for path in glob.glob(str(pattern)):
-            try:
-                content = Path(path).read_text()
-                # Extract CLIENT_ID and CLIENT_SECRET from the JS file
-                import re
-                id_match = re.search(r'CLIENT_ID\s*=\s*["\']([^"\']+)["\']', content)
-                secret_match = re.search(r'CLIENT_SECRET\s*=\s*["\']([^"\']+)["\']', content)
-                if id_match and secret_match:
-                    return id_match.group(1), secret_match.group(1)
-            except:
-                pass
+    for pattern in fallback_patterns:
+        for path in glob.glob(pattern):
+            if result := _extract_oauth_from_file(Path(path)):
+                return result
 
     return None
 
@@ -1084,12 +1155,12 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
         elif "error" in data:
             parts.append(f"Codex: {error_icon}")
 
-    # Z.AI
+    # Z.AI (5h shared quota across GLM models)
     if "zai" in results:
         data = results["zai"]
         if data.get("status") == "ok" and "token_quota" in data:
             pct = data["token_quota"].get("percentage", 0)
-            pct_str = f"{pct}%"
+            pct_str = f"{pct}% (5h)"
             if use_color:
                 parts.append(f"Z.AI: {colorize_pct(pct_str, pct)}")
             else:
@@ -1183,7 +1254,7 @@ Examples:
 
 Example Output:
   # One-liner (5h window)
-  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ )
+  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ )
 """
 
     parser = argparse.ArgumentParser(
@@ -1255,7 +1326,7 @@ Example Output:
         if "gemini" in results:
             print_section("Gemini CLI", results["gemini"])
         if "zai" in results:
-            print_section("Z.AI (GLM-4)", results["zai"])
+            print_section("Z.AI (5h shared - GLM-4.x)", results["zai"])
         if "openrouter" in results:
             print_section("OpenRouter", results["openrouter"])
 

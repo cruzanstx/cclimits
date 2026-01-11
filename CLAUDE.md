@@ -114,6 +114,6 @@ Before publishing:
 
 1. **Python required**: npm package needs Python 3.10+ on user's system
 2. **Gemini OAuth**: Must have Gemini CLI installed for token refresh
-3. **Z.AI**: No 5h/7d window, only total quota percentage
+3. **Z.AI**: 5h shared quota across GLM-4.7, GLM-4.6, GLM-4.5V, GLM-4.5, GLM-4.5-Air, and Visual Analysis
 4. **Codex API key mode**: No quota info (only OAuth has it)
 5. **Windows**: Untested, may have path issues
