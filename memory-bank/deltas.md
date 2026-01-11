@@ -1,5 +1,21 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-01-11: Z.AI 5h Window Indicator (v1.2.5)
+
+- Added `(5h)` indicator to Z.AI quota in oneline output
+- Updated verbose section header to "Z.AI (5h shared - GLM-4.x)"
+- Z.AI quota is shared across GLM-4.7, GLM-4.6, GLM-4.5V, GLM-4.5, GLM-4.5-Air, and Visual Analysis
+
+**Files:** `lib/cclimits.py`, `CLAUDE.md`
+
+## 2026-01-10: Oneline Both Mode + Noemoji Flag (v1.2.3-1.2.4)
+
+- Added `--oneline both` to show 5h/7d windows simultaneously
+- Added `--noemoji` flag for color-coded percentages instead of emoji icons
+- Useful for terminals without emoji support
+
+**Files:** `lib/cclimits.py`
+
 ## 2026-01-01: Gemini Tiers Refactoring
 
 - Grouped Gemini models by quota tier (3-Flash, Flash, Pro)

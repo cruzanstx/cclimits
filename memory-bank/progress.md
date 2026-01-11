@@ -5,9 +5,9 @@
 - **Claude Code**: OAuth token from keychain (macOS) or `~/.claude/.credentials.json` (Linux)
 - **OpenAI Codex**: JWT from `~/.codex/auth.json`
 - **Gemini CLI**: OAuth from `~/.gemini/oauth_creds.json`, auto-refreshes expired tokens
-- **Z.AI**: API token from environment variable (`$ZAI_KEY` or `$ZAI_API_KEY`)
-- **Display modes**: JSON, detailed, compact one-liner
-- **Time windows**: 5h and 7d for Claude and Codex
+- **Z.AI**: API token from environment variable (`$ZAI_KEY` or `$ZAI_API_KEY`), 5h shared quota
+- **Display modes**: JSON, detailed, compact one-liner, noemoji color mode
+- **Time windows**: 5h and 7d for Claude/Codex, 5h for Z.AI (shared across GLM models)
 
 ## Current Status
 
