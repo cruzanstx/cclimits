@@ -635,11 +635,18 @@ def get_gemini_credentials() -> dict | None:
                     # Save updated credentials to file
                     if oauth_path:
                         try:
+                            # Read existing file to preserve all fields
                             oauth_data = json.loads(oauth_path.read_text())
                             oauth_data["access_token"] = new_tokens["access_token"]
                             oauth_data["expiry_date"] = new_expiry_ms
-                            oauth_path.write_text(json.dumps(oauth_data, indent=2))
-                        except:
+                            
+                            # Atomic write pattern to avoid corruption
+                            temp_path = oauth_path.with_suffix(".tmp")
+                            temp_path.write_text(json.dumps(oauth_data, indent=2))
+                            temp_path.rename(oauth_path)
+                        except Exception as e:
+                            # Log warning but continue - in-memory token still works
+                            print(f"Warning: Could not save refreshed OAuth token: {e}")
                             pass
         except:
             pass

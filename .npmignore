@@ -1,0 +1,12 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Development files
+.git/
+.gitignore
+memory-bank/
+prompts/
+*.md
+!README.md
