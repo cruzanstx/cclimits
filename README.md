@@ -1,6 +1,6 @@
 # cclimits
 
-Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI, and OpenRouter.
+Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI, and OpenRouter. It also supports checking keys used by **Aider** and **Continue**.
 
 ## Features
 
@@ -183,6 +183,16 @@ grep -E "CLIENT_(ID|SECRET)" ~/.npm/_npx/*/node_modules/@google/gemini-cli-core/
 export GEMINI_OAUTH_CLIENT_ID="..."
 export GEMINI_OAUTH_CLIENT_SECRET="..."
 ```
+
+## BYOK & Other Tools
+
+`cclimits` can monitor usage for "Bring Your Own Key" (BYOK) tools by checking the underlying provider directly:
+
+- **Aider / Continue**: If you use these with an API key (OpenAI, Anthropic, OpenRouter, Gemini), simply set the corresponding environment variable (e.g., `OPENROUTER_API_KEY`) and run `cclimits --openrouter` (or the relevant flag) to check your balance/quota.
+
+**Note on Integrated Providers:**
+- **GitHub Copilot**: Currently not supported as GitHub does not expose a public API for individual user quota/rate limits.
+- **Cursor / Windsurf**: Not supported yet as they do not provide public quota APIs.
 
 ## Requirements
 
