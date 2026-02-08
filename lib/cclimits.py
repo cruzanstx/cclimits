@@ -897,6 +897,59 @@ def get_zai_usage() -> dict:
     return result
 
 
+def get_kimi_credentials() -> str | None:
+    """Get Kimi (Moonshot AI) API key from environment variables"""
+    for var in ["MOONSHOT_API_KEY", "KIMI_API_KEY", "KIMI_KEY"]:
+        if key := os.environ.get(var):
+            return key
+    return None
+
+
+def get_kimi_usage() -> dict:
+    """Fetch Kimi account balance"""
+    key = get_kimi_credentials()
+    if not key:
+        return {
+            "error": "No credentials found",
+            "hint": "Set MOONSHOT_API_KEY environment variable"
+        }
+
+    headers = {"Authorization": f"Bearer {key}"}
+    status, data = http_get("https://api.moonshot.ai/v1/users/me/balance", headers)
+
+    if status == 200 and isinstance(data, dict):
+        # Response format:
+        # {
+        #   "code": 0,
+        #   "data": {
+        #     "available_balance": 49.58894,
+        #     "voucher_balance": 46.58893,
+        #     "cash_balance": 3.00001
+        #   },
+        #   "status": true
+        # }
+        if data.get("status") is True and "data" in data:
+            balance_data = data["data"]
+            available = float(balance_data.get("available_balance", 0))
+            cash = float(balance_data.get("cash_balance", 0))
+            voucher = float(balance_data.get("voucher_balance", 0))
+
+            return {
+                "status": "ok",
+                "balance": available,
+                "cash_balance": cash,
+                "voucher_balance": voucher,
+                "currency": "USD",  # Documentation says USD
+                "dashboard_url": "https://platform.moonshot.ai/console"
+            }
+        else:
+            return {"error": "API returned error status", "details": str(data)}
+    elif status == 401:
+        return {"error": "Invalid API key", "hint": "Check MOONSHOT_API_KEY"}
+    else:
+        return {"error": f"API error ({status})", "details": str(data)}
+
+
 def print_section(name: str, data: dict):
     """Pretty print a section"""
     print(f"\n{'='*50}")
@@ -1044,6 +1097,19 @@ def print_section(name: str, data: dict):
     if "dashboard_url" in data:
         print(f"  🔗 {data['dashboard_url']}")
 
+    # Kimi-specific
+    if "balance" in data and "cash_balance" in data:
+        balance = data["balance"]
+        cash = data["cash_balance"]
+        voucher = data["voucher_balance"]
+        currency = data.get("currency", "USD")
+        symbol = "$" if currency == "USD" else "¥"
+        
+        print(f"\n  Balance ({currency}):")
+        print(f"    Total:     {symbol}{balance:.4f}")
+        print(f"    Cash:      {symbol}{cash:.4f}")
+        print(f"    Voucher:   {symbol}{voucher:.4f}")
+        
     # General info
     if "source" in data:
         print(f"  📡 Source: {data['source']}")
@@ -1230,6 +1296,39 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
         elif "error" in data:
             parts.append(f"OpenRouter: {error_icon}")
 
+    # Kimi
+    if "kimi" in results:
+        data = results["kimi"]
+        if data.get("status") == "ok" and "balance" in data:
+            balance = data["balance"]
+            currency = data.get("currency", "USD")
+            symbol = "$" if currency == "USD" else "¥"
+            balance_str = f"{symbol}{balance:.2f}"
+            
+            # Status thresholds: >$5 ✅, $1-5 ⚠️, <$1 🔴, $0 ❌
+            if use_color:
+                if balance <= 0:
+                    color = COLORS['bold_red']
+                elif balance < 1.0:
+                    color = COLORS['red']
+                elif balance < 5.0:
+                    color = COLORS['yellow']
+                else:
+                    color = COLORS['green']
+                parts.append(f"Kimi: {color}{balance_str}{COLORS['reset']}")
+            else:
+                if balance <= 0:
+                    status_icon = "❌"
+                elif balance < 1.0:
+                    status_icon = "🔴"
+                elif balance < 5.0:
+                    status_icon = "⚠️"
+                else:
+                    status_icon = "✅"
+                parts.append(f"Kimi: {balance_str} {status_icon}")
+        elif "error" in data:
+            parts.append(f"Kimi: {error_icon}")
+
     print(" | ".join(parts))
 
 
@@ -1244,16 +1343,19 @@ Credential Locations (auto-discovered):
   Gemini     ~/.gemini/oauth_creds.json (auto-refreshes expired tokens)
   Z.AI       $ZAI_KEY or $ZAI_API_KEY environment variable
   OpenRouter $OPENROUTER_API_KEY environment variable
+  Kimi       $MOONSHOT_API_KEY environment variable
 
 Setup (one-time):
   claude           # Login to Claude Code
   codex login      # Login to OpenAI Codex
   gemini           # Login to Gemini CLI
-  export ZAI_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
+  export ZAI_KEY=your-key       # Add to ~/.zshrc or ~/.bashrc
+  export MOONSHOT_API_KEY=key   # Add to ~/.zshrc or ~/.bashrc
 
 Examples:
   cclimits              # Check all tools (detailed)
   cclimits --claude     # Claude only
+  cclimits --kimi       # Kimi only
   cclimits --json       # JSON output
   cclimits --oneline      # Compact one-liner (5h window)
   cclimits --oneline 7d   # Compact one-liner (7d window)
@@ -1261,11 +1363,11 @@ Examples:
 
 Example Output:
   # One-liner (5h window)
-  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ )
+  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ ... ) | Kimi: $49.59 ✅
 """
 
     parser = argparse.ArgumentParser(
-        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI, OpenRouter",
+        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI, OpenRouter, Kimi",
         epilog=epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -1279,6 +1381,7 @@ Example Output:
     parser.add_argument("--gemini", action="store_true", help="Only check Gemini")
     parser.add_argument("--zai", action="store_true", help="Only check Z.AI")
     parser.add_argument("--openrouter", action="store_true", help="Only check OpenRouter")
+    parser.add_argument("--kimi", action="store_true", help="Only check Kimi (Moonshot AI)")
     parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
     parser.add_argument("--cache-ttl", type=int, metavar="SECONDS",
                         help="Override default TTL (default: 60, implies --cached)")
@@ -1296,7 +1399,7 @@ Example Output:
             results = cached_results
 
     # If no specific tool selected, check all
-    check_all = not (args.claude or args.codex or args.gemini or args.zai or args.openrouter)
+    check_all = not (args.claude or args.codex or args.gemini or args.zai or args.openrouter or args.kimi)
 
     skip_fetch = results is not None
     if not skip_fetch:
@@ -1312,6 +1415,8 @@ Example Output:
         results["zai"] = get_zai_usage()
     if check_all or args.openrouter:
         results["openrouter"] = get_openrouter_usage()
+    if check_all or args.kimi:
+        results["kimi"] = get_kimi_usage()
 
     # Always write cache for future --cached calls
     if not skip_fetch:
@@ -1336,6 +1441,8 @@ Example Output:
             print_section("Z.AI (5h shared - GLM-4.x)", results["zai"])
         if "openrouter" in results:
             print_section("OpenRouter", results["openrouter"])
+        if "kimi" in results:
+            print_section("Kimi K2 (Moonshot AI)", results["kimi"])
 
         print("\n" + "="*50)
         print("  Done!")

@@ -1,6 +1,6 @@
 # cclimits
 
-Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI, and OpenRouter. It also supports checking keys used by **Aider** and **Continue**.
+Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI, OpenRouter, and Kimi K2 (Moonshot AI). It also supports checking keys used by **Aider** and **Continue**.
 
 ## Features
 
@@ -46,6 +46,7 @@ cclimits --codex      # Codex only
 cclimits --gemini     # Gemini only
 cclimits --zai        # Z.AI only
 cclimits --openrouter # OpenRouter only
+cclimits --kimi       # Kimi only
 cclimits --json       # JSON output
 cclimits --oneline           # Compact one-liner (5h window)
 cclimits --oneline 7d        # Compact one-liner (7d window)
@@ -63,7 +64,7 @@ cclimits --oneline --cache-ttl 30  # Custom TTL in seconds
 
 ```bash
 # Single window (5h or 7d)
-Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅
+Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅ | Kimi: $49.59 ✅
 
 # Both windows (--oneline both) - shows 5h/7d combined
 Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1% (5h) ✅ | OpenRouter: $47.91 ✅
@@ -136,6 +137,16 @@ Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91
 
   Balance:     $47.91
   Total Used:  $2.09
+
+==================================================
+  Kimi K2 (Moonshot AI)
+==================================================
+  ✅ Connected
+
+  Balance (USD):
+    Total:     $49.5889
+    Cash:      $3.0000
+    Voucher:   $46.5889
 ```
 
 ## Status Icons
@@ -158,6 +169,7 @@ Credentials are auto-discovered from these locations:
 | **Gemini** | `~/.gemini/oauth_creds.json` (auto-refreshes) |
 | **Z.AI** | `$ZAI_KEY` or `$ZAI_API_KEY` environment variable |
 | **OpenRouter** | `$OPENROUTER_API_KEY` environment variable |
+| **Kimi** | `$MOONSHOT_API_KEY` environment variable |
 
 ## Setup (One-Time)
 
@@ -169,6 +181,7 @@ codex login      # Login to OpenAI Codex
 gemini           # Login to Gemini CLI
 export ZAI_KEY=your-key           # Add to ~/.zshrc or ~/.bashrc
 export OPENROUTER_API_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
+export MOONSHOT_API_KEY=your-key    # Add to ~/.zshrc or ~/.bashrc
 ```
 
 ### Gemini Token Refresh

@@ -7,13 +7,14 @@
 - **Gemini CLI**: OAuth from `~/.gemini/oauth_creds.json`, auto-refreshes expired tokens
 - **Z.AI**: API token from environment variable (`$ZAI_KEY` or `$ZAI_API_KEY`), 5h shared quota
 - **OpenRouter**: API token from environment variable (`$OPENROUTER_API_KEY`)
+- **Kimi K2 (Moonshot)**: API token from env var (`$MOONSHOT_API_KEY`), prepaid balance tracking
 - **Display modes**: JSON, detailed, compact one-liner, noemoji color mode
 - **Time windows**: 5h and 7d for Claude/Codex, 5h for Z.AI (shared across GLM models)
 - **BYOK Support**: Explicit documentation for monitoring Aider/Continue via their underlying provider keys.
 
 ## Current Status
 
-- ✅ All core AI tool integrations functional
+- ✅ All core AI tool integrations functional (Claude, Codex, Gemini, Z.AI, OpenRouter, Kimi)
 - ✅ Cross-platform credential detection (macOS/Linux)
 - ✅ npm package published as `cclimits`
 - ✅ Gemini models grouped by quota tier (3-Flash, Flash, Pro)

@@ -2,10 +2,10 @@
 
 ## Problem Statement
 
-Developers using multiple AI coding CLIs (Claude Code, Codex, Gemini, Z.AI) have no unified way to check their quota status. Each tool has different:
+Developers using multiple AI coding CLIs (Claude Code, Codex, Gemini, Z.AI, OpenRouter, Kimi) have no unified way to check their quota status. Each tool has different:
 - Credential storage locations
 - API endpoints for usage data
-- Quota windows (5h, 7d, monthly)
+- Quota windows (5h, 7d, monthly) or prepaid balances
 - Output formats
 
 This leads to:
@@ -25,7 +25,7 @@ A single CLI command that:
 ### Quick Status Check
 ```bash
 $ cclimits --oneline
-Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ )
+Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% ✅ | Gemini: ( 3-Flash 7% ✅ ... ) | Kimi: $49.59 ✅
 ```
 
 ### Detailed Analysis
