@@ -100,6 +100,7 @@ git push --tags
 | Gemini | `cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` | `Bearer {oauth}` |
 | Z.AI | `api.z.ai/api/monitor/usage/quota/limit` | `Authorization: {api_key}` |
 | OpenRouter | `openrouter.ai/api/v1/credits` | `Authorization: Bearer {api_key}` |
+| Kimi (Moonshot) | `api.moonshot.ai/v1/users/me/balance` | `Authorization: Bearer {api_key}` |
 
 ## Testing Checklist
 

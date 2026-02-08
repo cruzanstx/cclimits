@@ -1,5 +1,15 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-02-07: Kimi K2 (Moonshot AI) Integration
+
+- Added support for Kimi K2 (Moonshot AI) via `--kimi` flag
+- Implemented `get_kimi_credentials` and `get_kimi_usage`
+- Balance-based tracking (like OpenRouter) with USD/CNY currency support
+- Updated documentation (README, CLAUDE.md)
+- Integrated into all output modes (detailed, oneline, JSON)
+
+**Files:** `lib/cclimits.py`, `README.md`, `CLAUDE.md`
+
 ## 2026-01-11: Provider Research + Implementation Prompts
 
 - Completed research on 8+ AI coding providers (`research/ai-coding-providers.md`)
