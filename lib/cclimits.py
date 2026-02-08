@@ -1413,9 +1413,9 @@ Example Output:
         results["gemini"] = get_gemini_usage()
     if not skip_fetch and (check_all or args.zai):
         results["zai"] = get_zai_usage()
-    if check_all or args.openrouter:
+    if args.openrouter or (check_all and get_openrouter_credentials()):
         results["openrouter"] = get_openrouter_usage()
-    if check_all or args.kimi:
+    if args.kimi or (check_all and get_kimi_credentials()):
         results["kimi"] = get_kimi_usage()
 
     # Always write cache for future --cached calls
