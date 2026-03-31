@@ -10,7 +10,7 @@ const child = spawn('python3', [script, ...process.argv.slice(2)], {
 
 child.on('error', (err) => {
   if (err.code === 'ENOENT') {
-    console.error('Error: python3 not found. Please install Python 3.10+');
+    console.error('Error: python3 not found. Please install Python 3.9+');
     process.exit(1);
   }
   throw err;

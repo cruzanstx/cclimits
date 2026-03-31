@@ -115,7 +115,7 @@ Before publishing:
 
 ## Known Limitations
 
-1. **Python required**: npm package needs Python 3.10+ on user's system
+1. **Python required**: npm package needs Python 3.9+ on user's system
 2. **Gemini OAuth (legacy)**: Gemini CLI was retired 2026-06-18; legacy token refresh needs an installed Gemini CLI package or env overrides
 3. **Antigravity credentials**: Read from `~/.gemini/antigravity-cli/antigravity-oauth-token` (written by `agy` CLI). Falls back to `ANTIGRAVITY_REFRESH_TOKEN` / `ANTIGRAVITY_ACCESS_TOKEN` if absent
 4. **Z.AI**: 5h shared quota across GLM-4.7, GLM-4.6, GLM-4.5V, GLM-4.5, GLM-4.5-Air, and Visual Analysis

@@ -4,7 +4,7 @@
 
 | Component | Technology |
 |-----------|------------|
-| Core Script | Python 3.10+ |
+| Core Script | Python 3.9+ |
 | npm Wrapper | Node.js 16+ |
 | HTTP Client | requests (optional), urllib (fallback) |
 | Distribution | npm, GitHub |
@@ -26,7 +26,7 @@ cclimits/
 ## Dependencies
 
 ### Runtime
-- **Python 3.10+**: Required (type hints, match statements)
+- **Python 3.9+**: Required (type hints deferred with __future__)
 - **requests**: Optional (improves HTTP handling)
 - **Node.js 16+**: Required for npx distribution
 
