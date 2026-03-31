@@ -23,7 +23,7 @@ npm install -g cclimits
 cclimits
 ```
 
-**Requires**: Python 3.10+ installed on your system.
+**Requires**: Python 3.9+ installed on your system.
 
 ### Via Git
 
@@ -209,7 +209,7 @@ export GEMINI_OAUTH_CLIENT_SECRET="..."
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.9+
 - `requests` library (optional, falls back to urllib)
 
 ## License

@@ -24,7 +24,7 @@
 
 ### Non-Functional
 - No external dependencies required (urllib fallback)
-- Python 3.10+ compatible
+- Python 3.9+ compatible
 - Fast execution (<5s for all tools)
 - Graceful degradation if tools unavailable
 
