@@ -182,6 +182,31 @@ class TestPrintSection:
         assert "Request Quota:" in captured.out
         assert "7-Day Historical" in captured.out
 
+    def test_antigravity_model_table(self, capsys):
+        """Test printing Antigravity per-model quota table."""
+        data = {
+            "status": "ok",
+            "project_id": "test-project",
+            "subscription_tier": "free",
+            "summary": {
+                "model_count": 2,
+                "min_remaining_pct": 65,
+                "avg_remaining_pct": 78,
+            },
+            "models": [
+                {"name": "gemini-3-pro", "remaining_pct": 92, "reset_time": "2026-05-30T18:00:00Z"},
+                {"name": "claude-opus-4-5-thinking", "remaining_pct": 65, "reset_time": "2026-05-30T17:00:00Z"},
+            ],
+        }
+
+        print_section("Google Antigravity", data)
+        captured = capsys.readouterr()
+
+        assert "Google Antigravity" in captured.out
+        assert "Project: test-project" in captured.out
+        assert "Tightest:  65% remaining" in captured.out
+        assert captured.out.index("claude-opus-4-5-thinking") < captured.out.index("gemini-3-pro")
+
     def test_error_message(self, capsys):
         """Test printing error message."""
         data = {
@@ -485,8 +510,8 @@ class TestPrintOnelineEdgeCases:
         # Should just print newline
         assert captured.out == "\n"
 
-    def test_invalid_window_ignored(self, capsys):
-        """Test that invalid window is ignored by print_oneline (validation happens in main())."""
+    def test_invalid_window_uses_5h_fallback(self, capsys):
+        """Test invalid window values use the 5h fallback."""
         results = {
             "claude": {
                 "status": "ok",
@@ -494,8 +519,6 @@ class TestPrintOnelineEdgeCases:
                 "seven_day": {"used": "72.3%"}
             }
         }
-        # print_oneline doesn't validate window, so this just won't match data
         print_oneline(results, "invalid")
         captured = capsys.readouterr()
-        # No match, so empty output
-        assert captured.out == "\n"
+        assert "Claude: 45.5% (5h)" in captured.out

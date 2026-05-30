@@ -8,6 +8,8 @@ from cclimits import (
     get_claude_usage,
     get_codex_usage,
     get_gemini_usage,
+    get_antigravity_usage,
+    _normalize_antigravity_models,
     get_zai_usage,
     GEMINI_TIERS
 )
@@ -244,6 +246,63 @@ class TestGetGeminiUsage:
 
         assert result["error"] == "No credentials found"
         assert "GEMINI_API_KEY" in result["hint"]
+
+
+class TestGetAntigravityUsage:
+    """Tests for Antigravity usage retrieval."""
+
+    def test_normalize_models_sorts_by_remaining_quota(self):
+        """Test Antigravity model normalization and tightest-first sorting."""
+        result = _normalize_antigravity_models({
+            "models": {
+                "gemini-3-pro": {"quotaInfo": {"remainingFraction": 0.92, "resetTime": "2026-05-30T18:00:00Z"}},
+                "claude-opus-4-5-thinking": {"quotaInfo": {"remainingFraction": 0.65, "resetTime": "2026-05-30T17:00:00Z"}},
+            }
+        })
+
+        assert result[0]["name"] == "claude-opus-4-5-thinking"
+        assert result[0]["remaining_pct"] == 65
+        assert result[1]["remaining_pct"] == 92
+
+    @patch('cclimits.get_antigravity_credentials')
+    @patch('cclimits.http_post')
+    def test_successful_usage(self, mock_post, mock_creds):
+        """Test successful Antigravity two-step API flow."""
+        mock_creds.return_value = {"access_token": "test-token", "source": "env"}
+        mock_post.side_effect = [
+            (200, {
+                "cloudaicompanionProject": {"id": "test-project"},
+                "currentTier": {"id": "free"},
+            }),
+            (200, {
+                "models": {
+                    "gemini-3-pro": {"quotaInfo": {"remainingFraction": 0.92, "resetTime": "2026-05-30T18:00:00Z"}},
+                    "claude-sonnet-4-6": {"quotaInfo": {"remainingFraction": 0.71, "resetTime": "2026-05-30T18:00:00Z"}},
+                }
+            }),
+        ]
+
+        result = get_antigravity_usage()
+
+        assert result["status"] == "ok"
+        assert result["project_id"] == "test-project"
+        assert result["subscription_tier"] == "free"
+        assert result["summary"] == {
+            "model_count": 2,
+            "min_remaining_pct": 71,
+            "avg_remaining_pct": 82,
+        }
+        assert result["models"][0]["name"] == "claude-sonnet-4-6"
+
+    @patch('cclimits.get_antigravity_credentials')
+    def test_no_credentials(self, mock_creds):
+        """Test missing Antigravity credentials."""
+        mock_creds.return_value = None
+
+        result = get_antigravity_usage()
+
+        assert result["error"] == "No credentials found"
+        assert "ANTIGRAVITY_REFRESH_TOKEN" in result["hint"]
 
 
 class TestGetZaiUsage:

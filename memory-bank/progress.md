@@ -5,6 +5,7 @@
 - **Claude Code**: OAuth token from keychain (macOS) or `~/.claude/.credentials.json` (Linux)
 - **OpenAI Codex**: JWT from `~/.codex/auth.json`
 - **Gemini CLI**: OAuth from `~/.gemini/oauth_creds.json`, auto-refreshes expired tokens
+- **Google Antigravity**: OAuth refresh token from OS keyring candidates or `ANTIGRAVITY_REFRESH_TOKEN`; per-model quota tracking
 - **Z.AI**: API token from environment variable (`$ZAI_KEY` or `$ZAI_API_KEY`), 5h shared quota
 - **OpenRouter**: API token from environment variable (`$OPENROUTER_API_KEY`)
 - **Kimi K2 (Moonshot)**: API token from env var (`$MOONSHOT_API_KEY`), prepaid balance tracking
@@ -14,10 +15,11 @@
 
 ## Current Status
 
-- ✅ All core AI tool integrations functional (Claude, Codex, Gemini, Z.AI, OpenRouter, Kimi)
+- ✅ All core AI tool integrations functional (Claude, Codex, Gemini, Antigravity, Z.AI, OpenRouter, Kimi)
 - ✅ Cross-platform credential detection (macOS/Linux)
 - ✅ npm package published as `cclimits`
 - ✅ Gemini models grouped by quota tier (3-Flash, Flash, Pro)
+- ✅ Antigravity models sorted by tightest remaining quota with min/avg summary
 - ✅ Research on additional providers completed (`research/ai-coding-providers.md`)
 
 ## Known Issues

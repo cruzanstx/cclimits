@@ -1,5 +1,14 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-05-30: Google Antigravity Provider
+
+- Added Google Antigravity support via `--antigravity` with Cloud Code Assist `:loadCodeAssist` + `:fetchAvailableModels`
+- Implemented keyring-first credential discovery with env fallback (`ANTIGRAVITY_REFRESH_TOKEN`, `ANTIGRAVITY_ACCESS_TOKEN`)
+- Normalizes per-model quota data into a tightest-first model list plus summary (`model_count`, min/avg remaining percentage)
+- Updated detailed, one-line, and JSON output paths plus README and CLAUDE.md provider docs
+
+**Files:** `lib/cclimits.py`, `README.md`, `CLAUDE.md`, `memory-bank/deltas.md`, `memory-bank/progress.md`
+
 ## 2026-02-07: Kimi K2 (Moonshot AI) Integration
 
 - Added support for Kimi K2 (Moonshot AI) via `--kimi` flag

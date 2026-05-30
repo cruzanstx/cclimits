@@ -16,6 +16,7 @@ try:
     import requests
     HAS_REQUESTS = True
 except ImportError:
+    requests = None
     HAS_REQUESTS = False
 
 # Always import urllib modules for fallback
@@ -31,6 +32,22 @@ GEMINI_TIERS = {
     "Flash": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
     "Pro": ["gemini-2.5-pro", "gemini-3-pro-preview"],
 }
+
+ANTIGRAVITY_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+ANTIGRAVITY_CLIENT_SECRET = "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"
+ANTIGRAVITY_ENDPOINTS = [
+    "https://cloudcode-pa.googleapis.com",
+    "https://daily-cloudcode-pa.sandbox.googleapis.com",
+    "https://autopush-cloudcode-pa.sandbox.googleapis.com",
+]
+# Probe likely keyring service names because the official service name is not confirmed.
+ANTIGRAVITY_KEYRING_SERVICE_CANDIDATES = [
+    "Antigravity",
+    "antigravity",
+    "Google Antigravity",
+    "google-antigravity",
+    "antigravity-cli",
+]
 
 COLORS = {
     'green': '\033[32m',
@@ -140,7 +157,7 @@ def get_openrouter_usage() -> dict:
 
 def http_get(url: str, headers: dict) -> tuple[int, dict | str]:
     """Make HTTP GET request, return (status_code, response_data)"""
-    if HAS_REQUESTS:
+    if requests is not None:
         try:
             resp = requests.get(url, headers=headers, timeout=10)
             try:
@@ -166,7 +183,7 @@ def http_get(url: str, headers: dict) -> tuple[int, dict | str]:
 
 def http_post(url: str, headers: dict, body: dict) -> tuple[int, dict | str]:
     """Make HTTP POST request, return (status_code, response_data)"""
-    if HAS_REQUESTS:
+    if requests is not None:
         try:
             resp = requests.post(url, headers=headers, json=body, timeout=10)
             try:
@@ -273,7 +290,7 @@ def get_claude_usage() -> dict:
     status, data = http_get("https://api.anthropic.com/api/oauth/usage", headers)
 
     if status == 200 and isinstance(data, dict):
-        result = {"status": "ok"}
+        result: dict = {"status": "ok"}
 
         if "five_hour" in data and data["five_hour"]:
             result["five_hour"] = {
@@ -558,7 +575,7 @@ def refresh_gemini_token(refresh_token: str) -> dict | None:
     }
 
     try:
-        if HAS_REQUESTS:
+        if requests is not None:
             resp = requests.post(
                 "https://oauth2.googleapis.com/token",
                 data=body,
@@ -950,6 +967,219 @@ def get_kimi_usage() -> dict:
         return {"error": f"API error ({status})", "details": str(data)}
 
 
+def _get_antigravity_keyring_token(service: str) -> str | None:
+    """Best-effort Antigravity refresh-token lookup from OS keyring."""
+    try:
+        if sys.platform == "darwin":
+            result = subprocess.run(
+                ["security", "find-generic-password", "-s", service, "-w"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        elif sys.platform.startswith("linux"):
+            result = subprocess.run(
+                ["secret-tool", "lookup", "service", service],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        elif sys.platform.startswith("win"):
+            try:
+                keyring = __import__("keyring")
+                return keyring.get_password(service, "refresh_token") or keyring.get_password(service, "token")
+            except Exception:
+                return None
+    except Exception:
+        return None
+    return None
+
+
+def refresh_antigravity_token(refresh_token: str) -> dict | None:
+    """Refresh Antigravity OAuth token using its public installed-app client."""
+    body = {
+        "client_id": ANTIGRAVITY_CLIENT_ID,
+        "client_secret": ANTIGRAVITY_CLIENT_SECRET,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }
+
+    try:
+        data = urllib.parse.urlencode(body).encode('utf-8')
+        req = urllib.request.Request(
+            "https://oauth2.googleapis.com/token",
+            data=data,
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                return json.loads(resp.read().decode('utf-8'))
+    except Exception:
+        pass
+    return None
+
+
+def get_antigravity_credentials() -> dict | None:
+    """Get Antigravity OAuth tokens from keyring candidates or environment."""
+    result = {}
+
+    for service in ANTIGRAVITY_KEYRING_SERVICE_CANDIDATES:
+        token = _get_antigravity_keyring_token(service)
+        if token:
+            result["refresh_token"] = token
+            result["source"] = "keyring"
+            break
+
+    if not result:
+        if refresh := os.environ.get("ANTIGRAVITY_REFRESH_TOKEN"):
+            result["refresh_token"] = refresh
+        if access := os.environ.get("ANTIGRAVITY_ACCESS_TOKEN"):
+            result["access_token"] = access
+        if result:
+            result["source"] = "env"
+
+    if result.get("refresh_token") and not result.get("access_token"):
+        refreshed = refresh_antigravity_token(result["refresh_token"])
+        if refreshed and refreshed.get("access_token"):
+            result["access_token"] = refreshed["access_token"]
+            result["token_refreshed"] = True
+
+    return result or None
+
+
+def _antigravity_headers(access_token: str, user_agent: str) -> dict:
+    return {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "User-Agent": user_agent,
+    }
+
+
+def _extract_antigravity_project(data: dict) -> str | None:
+    project = data.get("cloudaicompanionProject")
+    if isinstance(project, str):
+        return project
+    if isinstance(project, dict):
+        if project_id := project.get("id"):
+            return project_id
+    return None
+
+
+def _normalize_antigravity_models(data: dict) -> list[dict]:
+    raw_models = data.get("models", {})
+    models = []
+
+    if isinstance(raw_models, dict):
+        iterable = raw_models.items()
+    elif isinstance(raw_models, list):
+        iterable = ((model.get("name") or model.get("id"), model) for model in raw_models if isinstance(model, dict))
+    else:
+        iterable = []
+
+    for name, model_data in iterable:
+        if not name or not isinstance(model_data, dict):
+            continue
+        quota = model_data.get("quotaInfo", {})
+        if not isinstance(quota, dict):
+            quota = {}
+        remaining_fraction = quota.get("remainingFraction")
+        try:
+            remaining_pct = int(round(float(remaining_fraction if remaining_fraction is not None else 0) * 100))
+        except (TypeError, ValueError):
+            remaining_pct = 0
+        models.append({
+            "name": name,
+            "remaining_pct": max(0, min(100, remaining_pct)),
+            "reset_time": quota.get("resetTime") or "",
+        })
+
+    return sorted(models, key=lambda item: (item["remaining_pct"], item["name"]))
+
+
+def get_antigravity_usage() -> dict:
+    """Fetch Antigravity per-model quota via Cloud Code Assist."""
+    creds = get_antigravity_credentials()
+    if not creds or not creds.get("access_token"):
+        return {
+            "error": "No credentials found",
+            "hint": "Run 'antigravity auth login' or set ANTIGRAVITY_REFRESH_TOKEN"
+        }
+
+    access_token = creds["access_token"]
+    refreshed_once = bool(creds.get("token_refreshed"))
+    last_error = None
+
+    for base_url in ANTIGRAVITY_ENDPOINTS:
+        load_url = f"{base_url}/v1internal:loadCodeAssist"
+        fetch_url = f"{base_url}/v1internal:fetchAvailableModels"
+
+        load_headers = _antigravity_headers(access_token, "antigravity/windows/amd64")
+        status, data = http_post(load_url, load_headers, {"metadata": {"ideType": "ANTIGRAVITY"}})
+        if status == 401 and creds.get("refresh_token") and not refreshed_once:
+            refreshed = refresh_antigravity_token(creds["refresh_token"])
+            if refreshed and refreshed.get("access_token"):
+                access_token = refreshed["access_token"]
+                refreshed_once = True
+                load_headers = _antigravity_headers(access_token, "antigravity/windows/amd64")
+                status, data = http_post(load_url, load_headers, {"metadata": {"ideType": "ANTIGRAVITY"}})
+        if status == 401:
+            return {"error": "Authentication failed", "hint": "Run 'antigravity auth login' to refresh credentials"}
+        if status < 200 or status >= 300 or not isinstance(data, dict):
+            last_error = f"{base_url} loadCodeAssist returned {status}: {data}"
+            continue
+
+        project_id = _extract_antigravity_project(data)
+        if not project_id:
+            last_error = f"{base_url} did not return cloudaicompanionProject"
+            continue
+
+        tier = data.get("currentTier") or data.get("paidTier") or {}
+        if isinstance(tier, dict):
+            subscription_tier = tier.get("id") or "free"
+        elif isinstance(tier, str):
+            subscription_tier = tier
+        else:
+            subscription_tier = "free"
+
+        fetch_headers = _antigravity_headers(access_token, "antigravity/1.11.5 windows/amd64")
+        quota_status, quota_data = http_post(fetch_url, fetch_headers, {"project": project_id})
+        if quota_status == 401 and creds.get("refresh_token") and not refreshed_once:
+            refreshed = refresh_antigravity_token(creds["refresh_token"])
+            if refreshed and refreshed.get("access_token"):
+                access_token = refreshed["access_token"]
+                refreshed_once = True
+                fetch_headers = _antigravity_headers(access_token, "antigravity/1.11.5 windows/amd64")
+                quota_status, quota_data = http_post(fetch_url, fetch_headers, {"project": project_id})
+        if quota_status == 401:
+            return {"error": "Authentication failed", "hint": "Run 'antigravity auth login' to refresh credentials"}
+        if quota_status < 200 or quota_status >= 300 or not isinstance(quota_data, dict):
+            last_error = f"{base_url} fetchAvailableModels returned {quota_status}: {quota_data}"
+            continue
+
+        models = _normalize_antigravity_models(quota_data)
+        remaining_values = [model["remaining_pct"] for model in models]
+        summary = {
+            "model_count": len(models),
+            "min_remaining_pct": min(remaining_values) if remaining_values else 0,
+            "avg_remaining_pct": int(round(sum(remaining_values) / len(remaining_values))) if remaining_values else 0,
+        }
+        result = {
+            "status": "ok",
+            "project_id": project_id,
+            "subscription_tier": subscription_tier,
+            "models": models,
+            "summary": summary,
+            "dashboard_url": "https://antigravity.google",
+        }
+        if creds.get("source"):
+            result["source"] = creds["source"]
+        if refreshed_once:
+            result["token_refreshed"] = True
+        return result
+
+    return {"error": "API error", "details": last_error or "No Antigravity endpoint returned quota data"}
+
+
 def print_section(name: str, data: dict):
     """Pretty print a section"""
     print(f"\n{'='*50}")
@@ -1040,9 +1270,32 @@ def print_section(name: str, data: dict):
     if "gcp_project" in data:
         print(f"  📦 GCP Project: {data['gcp_project']}")
 
+    # Antigravity per-model quotas
+    if isinstance(data.get("models"), list) and "summary" in data:
+        if "project_id" in data:
+            print(f"  📦 Project: {data['project_id']}")
+        if "subscription_tier" in data:
+            print(f"  📊 Tier: {data['subscription_tier']}")
+        summary = data["summary"]
+        print(f"\n  Model Quotas:")
+        print(f"    Models:    {summary.get('model_count', 0)}")
+        print(f"    Tightest:  {summary.get('min_remaining_pct', 0)}% remaining")
+        print(f"    Average:   {summary.get('avg_remaining_pct', 0)}% remaining")
+        print(f"\n    {'Model':<32} {'Remaining':>10}  Reset")
+        print(f"    {'-'*32} {'-'*10}  {'-'*16}")
+        sorted_models = sorted(data["models"], key=lambda item: (item.get("remaining_pct", 0), item.get("name", "")))
+        for model in sorted_models[:10]:
+            name = str(model.get("name", "?"))[:32]
+            remaining = model.get("remaining_pct", 0)
+            reset = model.get("reset_time") or ""
+            print(f"    {name:<32} {remaining:>9}%  {reset}")
+        hidden_count = len(sorted_models) - 10
+        if hidden_count > 0:
+            print(f"    ... {hidden_count} more models hidden")
+
     # Gemini tier quotas
-    if "models" in data:
-        print(f"\n  Quota by Tier:")
+    if isinstance(data.get("models"), dict):
+        print(f"\n  Model Quotas by Tier:")
         tier_order = ["3-Flash", "Flash", "Pro"]
         for tier_name in tier_order:
             tier_models = GEMINI_TIERS.get(tier_name, [])
@@ -1053,7 +1306,7 @@ def print_section(name: str, data: dict):
                     remaining = model_data.get("remaining", "?")
                     reset = model_data.get("resets_in", "")
                     reset_str = f" (resets: {reset})" if reset else ""
-                    print(f"    {tier_name}: {used} used, {remaining} remaining{reset_str}")
+                    print(f"    {tier_name} ({model_id}): {used} used, {remaining} remaining{reset_str}")
                     break  # Only need first model from each tier
 
 
@@ -1165,6 +1418,9 @@ def get_status_icon(pct: float) -> str:
 
 def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
     """Print compact one-liner output"""
+    if window not in ("5h", "7d", "both"):
+        window = "5h"
+
     parts = []
     error_icon = f"{COLORS['bold_red']}ERR{COLORS['reset']}" if use_color else "❌"
 
@@ -1329,6 +1585,21 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
         elif "error" in data:
             parts.append(f"Kimi: {error_icon}")
 
+    # Antigravity
+    if "antigravity" in results:
+        data = results["antigravity"]
+        if data.get("status") == "ok" and "summary" in data:
+            summary = data["summary"]
+            min_pct = int(summary.get("min_remaining_pct", 0))
+            model_count = int(summary.get("model_count", 0))
+            pct_str = f"{min_pct}%"
+            if use_color:
+                parts.append(f"Antigravity: {colorize_pct(pct_str, min_pct)} ({model_count} models)")
+            else:
+                parts.append(f"Antigravity: {pct_str} ({model_count} models) {get_status_icon(min_pct)}")
+        elif "error" in data:
+            parts.append(f"Antigravity: {error_icon}")
+
     print(" | ".join(parts))
 
 
@@ -1344,11 +1615,13 @@ Credential Locations (auto-discovered):
   Z.AI       $ZAI_KEY or $ZAI_API_KEY environment variable
   OpenRouter $OPENROUTER_API_KEY environment variable
   Kimi       $MOONSHOT_API_KEY environment variable
+  Antigravity system keyring, or $ANTIGRAVITY_REFRESH_TOKEN
 
 Setup (one-time):
   claude           # Login to Claude Code
   codex login      # Login to OpenAI Codex
   gemini           # Login to Gemini CLI
+  antigravity auth login  # Login to Google Antigravity
   export ZAI_KEY=your-key       # Add to ~/.zshrc or ~/.bashrc
   export MOONSHOT_API_KEY=key   # Add to ~/.zshrc or ~/.bashrc
 
@@ -1356,6 +1629,7 @@ Examples:
   cclimits              # Check all tools (detailed)
   cclimits --claude     # Claude only
   cclimits --kimi       # Kimi only
+  cclimits --antigravity # Antigravity only
   cclimits --json       # JSON output
   cclimits --oneline      # Compact one-liner (5h window)
   cclimits --oneline 7d   # Compact one-liner (7d window)
@@ -1363,11 +1637,11 @@ Examples:
 
 Example Output:
   # One-liner (5h window)
-  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ ... ) | Kimi: $49.59 ✅
+  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ ... ) | Kimi: $49.59 ✅ | Antigravity: 65% (8 models) ✅
 """
 
     parser = argparse.ArgumentParser(
-        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI, OpenRouter, Kimi",
+        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI, OpenRouter, Kimi, Antigravity",
         epilog=epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -1382,6 +1656,7 @@ Example Output:
     parser.add_argument("--zai", action="store_true", help="Only check Z.AI")
     parser.add_argument("--openrouter", action="store_true", help="Only check OpenRouter")
     parser.add_argument("--kimi", action="store_true", help="Only check Kimi (Moonshot AI)")
+    parser.add_argument("--antigravity", action="store_true", help="Only check Google Antigravity")
     parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
     parser.add_argument("--cache-ttl", type=int, metavar="SECONDS",
                         help="Override default TTL (default: 60, implies --cached)")
@@ -1399,7 +1674,7 @@ Example Output:
             results = cached_results
 
     # If no specific tool selected, check all
-    check_all = not (args.claude or args.codex or args.gemini or args.zai or args.openrouter or args.kimi)
+    check_all = not (args.claude or args.codex or args.gemini or args.zai or args.openrouter or args.kimi or args.antigravity)
 
     skip_fetch = results is not None
     if not skip_fetch:
@@ -1417,6 +1692,8 @@ Example Output:
         results["openrouter"] = get_openrouter_usage()
     if args.kimi or (check_all and get_kimi_credentials()):
         results["kimi"] = get_kimi_usage()
+    if args.antigravity or (check_all and get_antigravity_credentials()):
+        results["antigravity"] = get_antigravity_usage()
 
     # Always write cache for future --cached calls
     if not skip_fetch:
@@ -1443,6 +1720,8 @@ Example Output:
             print_section("OpenRouter", results["openrouter"])
         if "kimi" in results:
             print_section("Kimi K2 (Moonshot AI)", results["kimi"])
+        if "antigravity" in results:
+            print_section("Google Antigravity", results["antigravity"])
 
         print("\n" + "="*50)
         print("  Done!")

@@ -4,7 +4,7 @@ Project instructions for Claude Code when working in this repository.
 
 ## Quick Orientation
 
-**cclimits** is a CLI tool that checks quota/usage for AI coding assistants (Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI). Distributed via npm, runs Python under the hood.
+**cclimits** is a CLI tool that checks quota/usage for AI coding assistants (Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI). Distributed via npm, runs Python under the hood.
 
 **Repository**: https://github.com/cruzanstx/cclimits
 **npm**: https://www.npmjs.com/package/cclimits
@@ -57,7 +57,7 @@ except ImportError:
 ```
 
 ### No Hardcoded Secrets
-Gemini OAuth credentials are extracted from the user's Gemini CLI installation, not hardcoded (GitHub push protection).
+Gemini OAuth credentials are extracted from the user's Gemini CLI installation, not hardcoded (GitHub push protection). Antigravity uses public installed-app OAuth credentials; never hardcode user refresh/access tokens.
 
 ## Commands
 
@@ -98,6 +98,8 @@ git push --tags
 | Claude | `api.anthropic.com/api/oauth/usage` | `Bearer {token}` |
 | Codex | `chatgpt.com/backend-api/wham/usage` | `Bearer {oauth}` + `chatgpt-account-id` |
 | Gemini | `cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` | `Bearer {oauth}` |
+| Antigravity | `cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` | `Bearer {oauth}` |
+| Antigravity | `cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels` | `Bearer {oauth}` |
 | Z.AI | `api.z.ai/api/monitor/usage/quota/limit` | `Authorization: {api_key}` |
 | OpenRouter | `openrouter.ai/api/v1/credits` | `Authorization: Bearer {api_key}` |
 | Kimi (Moonshot) | `api.moonshot.ai/v1/users/me/balance` | `Authorization: Bearer {api_key}` |
@@ -114,7 +116,8 @@ Before publishing:
 ## Known Limitations
 
 1. **Python required**: npm package needs Python 3.10+ on user's system
-2. **Gemini OAuth**: Must have Gemini CLI installed for token refresh
-3. **Z.AI**: 5h shared quota across GLM-4.7, GLM-4.6, GLM-4.5V, GLM-4.5, GLM-4.5-Air, and Visual Analysis
-4. **Codex API key mode**: No quota info (only OAuth has it)
-5. **Windows**: Untested, may have path issues
+2. **Gemini OAuth (legacy)**: Gemini CLI was retired 2026-06-18; legacy token refresh needs an installed Gemini CLI package or env overrides
+3. **Antigravity credentials**: Refresh token is stored in the OS keyring, not a stable dotfile; service-name discovery is best effort with env fallback
+4. **Z.AI**: 5h shared quota across GLM-4.7, GLM-4.6, GLM-4.5V, GLM-4.5, GLM-4.5-Air, and Visual Analysis
+5. **Codex API key mode**: No quota info (only OAuth has it)
+6. **Windows**: Untested, may have path issues
