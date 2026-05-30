@@ -1,11 +1,11 @@
 # cclimits
 
-Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI, OpenRouter, and Kimi K2 (Moonshot AI). It also supports checking keys used by **Aider** and **Continue**.
+Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI, OpenRouter, and Kimi K2 (Moonshot AI). It also supports checking keys used by **Aider** and **Continue**.
 
 ## Features
 
 - **Auto-discovers credentials** from standard locations
-- **Auto-refreshes expired tokens** (Gemini OAuth) and persists them
+- **Auto-refreshes expired tokens** (Gemini OAuth, Antigravity OAuth)
 - **Multiple output formats**: detailed, JSON, compact one-liner
 - **Caching support** for fast statusline integration
 - **Cross-platform**: macOS and Linux support
@@ -47,6 +47,7 @@ cclimits --gemini     # Gemini only
 cclimits --zai        # Z.AI only
 cclimits --openrouter # OpenRouter only
 cclimits --kimi       # Kimi only
+cclimits --antigravity # Google Antigravity only
 cclimits --json       # JSON output
 cclimits --oneline           # Compact one-liner (5h window)
 cclimits --oneline 7d        # Compact one-liner (7d window)
@@ -64,13 +65,13 @@ cclimits --oneline --cache-ttl 30  # Custom TTL in seconds
 
 ```bash
 # Single window (5h or 7d)
-Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅ | Kimi: $49.59 ✅
+Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅ | Kimi: $49.59 ✅ | Antigravity: 65% (8 models) ✅
 
 # Both windows (--oneline both) - shows 5h/7d combined
 Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1% (5h) ✅ | OpenRouter: $47.91 ✅
 
 # No emoji mode (--noemoji) - colorizes percentages directly (green/yellow/red)
-Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91
+Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91 | Antigravity: 65% (8 models)
 ```
 
 ### Detailed Output (default)
@@ -147,6 +148,24 @@ Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91
     Total:     $49.5889
     Cash:      $3.0000
     Voucher:   $46.5889
+
+==================================================
+  Google Antigravity
+==================================================
+  ✅ Connected
+  📦 Project: my-cloud-code-project
+  📊 Tier: free
+
+  Model Quotas:
+    Models:    8
+    Tightest:  65% remaining
+    Average:   83% remaining
+
+    Model                             Remaining  Reset
+    -------------------------------- ----------  ----------------
+    claude-opus-4-5-thinking               65%  2026-05-30T18:00:00Z
+    claude-sonnet-4-6                      71%  2026-05-30T18:00:00Z
+    gemini-3-flash                         88%  2026-05-30T18:00:00Z
 ```
 
 ## Status Icons
@@ -170,6 +189,7 @@ Credentials are auto-discovered from these locations:
 | **Z.AI** | `$ZAI_KEY` or `$ZAI_API_KEY` environment variable |
 | **OpenRouter** | `$OPENROUTER_API_KEY` environment variable |
 | **Kimi** | `$MOONSHOT_API_KEY` environment variable |
+| **Antigravity** | System keyring after `antigravity auth login`; fallback `$ANTIGRAVITY_REFRESH_TOKEN` / `$ANTIGRAVITY_ACCESS_TOKEN` |
 
 ## Setup (One-Time)
 
@@ -179,10 +199,15 @@ If credentials are missing, run the corresponding CLI tool to authenticate:
 claude           # Login to Claude Code
 codex login      # Login to OpenAI Codex
 gemini           # Login to Gemini CLI
+antigravity auth login       # Login to Google Antigravity
 export ZAI_KEY=your-key           # Add to ~/.zshrc or ~/.bashrc
 export OPENROUTER_API_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
 export MOONSHOT_API_KEY=your-key    # Add to ~/.zshrc or ~/.bashrc
 ```
+
+### Antigravity Authentication
+
+Antigravity stores its Google OAuth refresh token in the OS keyring rather than a dotfile. `cclimits --antigravity` probes likely keyring service names automatically. If keyring discovery is unavailable, set `ANTIGRAVITY_REFRESH_TOKEN` (or `ANTIGRAVITY_ACCESS_TOKEN`) in your environment.
 
 ### Gemini Token Refresh
 
