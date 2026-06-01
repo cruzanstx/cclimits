@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Worktrees and tooling state
+.worktrees/
+.sisyphus/
+.antigravitycli/
+
+# Local editor config that varies by user (keep pyrightconfig.json — shared)
+.vscode/
+.idea/
+
+# Node
+node_modules/

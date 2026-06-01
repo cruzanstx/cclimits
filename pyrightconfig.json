@@ -1,0 +1,9 @@
+{
+  "typeCheckingMode": "basic",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["lib"]
+    }
+  ]
+}
