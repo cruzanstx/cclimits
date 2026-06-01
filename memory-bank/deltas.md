@@ -1,9 +1,19 @@
 # Recent Deltas (Last 3-5 Changes)
 
-## 2026-05-30: Google Antigravity Provider
+## 2026-05-31: Antigravity Live Test + File-Based Credential Discovery
+
+- Verified end-to-end against a real `agy` install — returned 20 models, project ID, free-tier
+- Discovered the real credential file: `~/.gemini/antigravity-cli/antigravity-oauth-token` (nested `{"token": {...}}` shape, RFC3339 expiry)
+- Replaced keyring-probing with file-based discovery (kept env-var fallback unchanged)
+- Fixed `--oneline` status icon: now passes `100 - min_remaining_pct` so 100% remaining renders ✅, not ❌
+- Closes #2
+
+**Files:** `lib/cclimits.py`, `README.md`, `CLAUDE.md`, `memory-bank/deltas.md`
+
+## 2026-05-30: Google Antigravity Provider (initial)
 
 - Added Google Antigravity support via `--antigravity` with Cloud Code Assist `:loadCodeAssist` + `:fetchAvailableModels`
-- Implemented keyring-first credential discovery with env fallback (`ANTIGRAVITY_REFRESH_TOKEN`, `ANTIGRAVITY_ACCESS_TOKEN`)
+- Implemented keyring-first credential discovery with env fallback (`ANTIGRAVITY_REFRESH_TOKEN`, `ANTIGRAVITY_ACCESS_TOKEN`) — superseded by 2026-05-31 entry
 - Normalizes per-model quota data into a tightest-first model list plus summary (`model_count`, min/avg remaining percentage)
 - Updated detailed, one-line, and JSON output paths plus README and CLAUDE.md provider docs
 

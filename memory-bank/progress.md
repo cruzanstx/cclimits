@@ -5,7 +5,7 @@
 - **Claude Code**: OAuth token from keychain (macOS) or `~/.claude/.credentials.json` (Linux)
 - **OpenAI Codex**: JWT from `~/.codex/auth.json`
 - **Gemini CLI**: OAuth from `~/.gemini/oauth_creds.json`, auto-refreshes expired tokens
-- **Google Antigravity**: OAuth refresh token from OS keyring candidates or `ANTIGRAVITY_REFRESH_TOKEN`; per-model quota tracking
+- **Google Antigravity**: OAuth tokens read from `~/.gemini/antigravity-cli/antigravity-oauth-token` (written by `agy` CLI) or `ANTIGRAVITY_REFRESH_TOKEN`; per-model quota tracking, live-verified against real install
 - **Z.AI**: API token from environment variable (`$ZAI_KEY` or `$ZAI_API_KEY`), 5h shared quota
 - **OpenRouter**: API token from environment variable (`$OPENROUTER_API_KEY`)
 - **Kimi K2 (Moonshot)**: API token from env var (`$MOONSHOT_API_KEY`), prepaid balance tracking

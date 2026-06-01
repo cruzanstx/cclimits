@@ -40,13 +40,9 @@ ANTIGRAVITY_ENDPOINTS = [
     "https://daily-cloudcode-pa.sandbox.googleapis.com",
     "https://autopush-cloudcode-pa.sandbox.googleapis.com",
 ]
-# Probe likely keyring service names because the official service name is not confirmed.
-ANTIGRAVITY_KEYRING_SERVICE_CANDIDATES = [
-    "Antigravity",
-    "antigravity",
-    "Google Antigravity",
-    "google-antigravity",
-    "antigravity-cli",
+ANTIGRAVITY_TOKEN_PATHS = [
+    Path.home() / ".gemini" / "antigravity-cli" / "antigravity-oauth-token",
+    Path.home() / ".config" / "antigravity-cli" / "antigravity-oauth-token",
 ]
 
 COLORS = {
@@ -967,31 +963,26 @@ def get_kimi_usage() -> dict:
         return {"error": f"API error ({status})", "details": str(data)}
 
 
-def _get_antigravity_keyring_token(service: str) -> str | None:
-    """Best-effort Antigravity refresh-token lookup from OS keyring."""
-    try:
-        if sys.platform == "darwin":
-            result = subprocess.run(
-                ["security", "find-generic-password", "-s", service, "-w"],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        elif sys.platform.startswith("linux"):
-            result = subprocess.run(
-                ["secret-tool", "lookup", "service", service],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        elif sys.platform.startswith("win"):
-            try:
-                keyring = __import__("keyring")
-                return keyring.get_password(service, "refresh_token") or keyring.get_password(service, "token")
-            except Exception:
-                return None
-    except Exception:
-        return None
+def _read_antigravity_token_file() -> dict | None:
+    """Read tokens from the Antigravity CLI's on-disk credentials file.
+
+    File shape: {"token": {"access_token", "refresh_token", "expiry"}, "auth_method": "..."}
+    where expiry is an RFC3339 timestamp written by the Go CLI.
+    """
+    for path in ANTIGRAVITY_TOKEN_PATHS:
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text())
+            tok = data.get("token") or {}
+            if tok.get("refresh_token") or tok.get("access_token"):
+                return {
+                    "access_token": tok.get("access_token"),
+                    "refresh_token": tok.get("refresh_token"),
+                    "expiry": tok.get("expiry"),
+                }
+        except Exception:
+            continue
     return None
 
 
@@ -1020,15 +1011,18 @@ def refresh_antigravity_token(refresh_token: str) -> dict | None:
 
 
 def get_antigravity_credentials() -> dict | None:
-    """Get Antigravity OAuth tokens from keyring candidates or environment."""
+    """Get Antigravity OAuth tokens from the CLI's on-disk file or env vars."""
     result = {}
 
-    for service in ANTIGRAVITY_KEYRING_SERVICE_CANDIDATES:
-        token = _get_antigravity_keyring_token(service)
-        if token:
-            result["refresh_token"] = token
-            result["source"] = "keyring"
-            break
+    if file_creds := _read_antigravity_token_file():
+        if file_creds.get("refresh_token"):
+            result["refresh_token"] = file_creds["refresh_token"]
+        if file_creds.get("access_token"):
+            result["access_token"] = file_creds["access_token"]
+        if file_creds.get("expiry"):
+            result["expiry"] = file_creds["expiry"]
+        if result:
+            result["source"] = "file"
 
     if not result:
         if refresh := os.environ.get("ANTIGRAVITY_REFRESH_TOKEN"):
@@ -1592,11 +1586,12 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
             summary = data["summary"]
             min_pct = int(summary.get("min_remaining_pct", 0))
             model_count = int(summary.get("model_count", 0))
+            used_pct = max(0, 100 - min_pct)
             pct_str = f"{min_pct}%"
             if use_color:
-                parts.append(f"Antigravity: {colorize_pct(pct_str, min_pct)} ({model_count} models)")
+                parts.append(f"Antigravity: {colorize_pct(pct_str, used_pct)} ({model_count} models)")
             else:
-                parts.append(f"Antigravity: {pct_str} ({model_count} models) {get_status_icon(min_pct)}")
+                parts.append(f"Antigravity: {pct_str} ({model_count} models) {get_status_icon(used_pct)}")
         elif "error" in data:
             parts.append(f"Antigravity: {error_icon}")
 

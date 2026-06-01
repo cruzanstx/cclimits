@@ -189,7 +189,7 @@ Credentials are auto-discovered from these locations:
 | **Z.AI** | `$ZAI_KEY` or `$ZAI_API_KEY` environment variable |
 | **OpenRouter** | `$OPENROUTER_API_KEY` environment variable |
 | **Kimi** | `$MOONSHOT_API_KEY` environment variable |
-| **Antigravity** | System keyring after `antigravity auth login`; fallback `$ANTIGRAVITY_REFRESH_TOKEN` / `$ANTIGRAVITY_ACCESS_TOKEN` |
+| **Antigravity** | `~/.gemini/antigravity-cli/antigravity-oauth-token` (auto-refreshes); fallback `$ANTIGRAVITY_REFRESH_TOKEN` / `$ANTIGRAVITY_ACCESS_TOKEN` |
 
 ## Setup (One-Time)
 
@@ -199,7 +199,7 @@ If credentials are missing, run the corresponding CLI tool to authenticate:
 claude           # Login to Claude Code
 codex login      # Login to OpenAI Codex
 gemini           # Login to Gemini CLI
-antigravity auth login       # Login to Google Antigravity
+agy -p hello                 # Login to Google Antigravity (prompts for OAuth)
 export ZAI_KEY=your-key           # Add to ~/.zshrc or ~/.bashrc
 export OPENROUTER_API_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
 export MOONSHOT_API_KEY=your-key    # Add to ~/.zshrc or ~/.bashrc
@@ -207,7 +207,7 @@ export MOONSHOT_API_KEY=your-key    # Add to ~/.zshrc or ~/.bashrc
 
 ### Antigravity Authentication
 
-Antigravity stores its Google OAuth refresh token in the OS keyring rather than a dotfile. `cclimits --antigravity` probes likely keyring service names automatically. If keyring discovery is unavailable, set `ANTIGRAVITY_REFRESH_TOKEN` (or `ANTIGRAVITY_ACCESS_TOKEN`) in your environment.
+The `agy` CLI writes its OAuth tokens to `~/.gemini/antigravity-cli/antigravity-oauth-token`; cclimits reads that file and auto-refreshes the access token via Google's OAuth endpoint. As a fallback (e.g. shared CI machines without the agy install), set `ANTIGRAVITY_REFRESH_TOKEN` (or `ANTIGRAVITY_ACCESS_TOKEN`) in your environment.
 
 ### Gemini Token Refresh
 

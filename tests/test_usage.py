@@ -2,12 +2,15 @@
 Tests for API usage functions (mock both credentials and HTTP).
 """
 
+import json
+from pathlib import Path
 from unittest.mock import patch, MagicMock, call
 import pytest
 from cclimits import (
     get_claude_usage,
     get_codex_usage,
     get_gemini_usage,
+    get_antigravity_credentials,
     get_antigravity_usage,
     _normalize_antigravity_models,
     get_zai_usage,
@@ -303,6 +306,33 @@ class TestGetAntigravityUsage:
 
         assert result["error"] == "No credentials found"
         assert "ANTIGRAVITY_REFRESH_TOKEN" in result["hint"]
+
+    def test_credentials_from_oauth_token_file(self, tmp_path, monkeypatch):
+        """get_antigravity_credentials reads ~/.gemini/antigravity-cli/antigravity-oauth-token."""
+        token_file = tmp_path / "antigravity-cli" / "antigravity-oauth-token"
+        token_file.parent.mkdir(parents=True)
+        token_file.write_text(json.dumps({
+            "token": {
+                "access_token": "ya29.test-access",
+                "refresh_token": "1//test-refresh",
+                "expiry": "2030-01-01T00:00:00Z",
+            },
+            "auth_method": "consumer",
+        }))
+
+        monkeypatch.delenv("ANTIGRAVITY_REFRESH_TOKEN", raising=False)
+        monkeypatch.delenv("ANTIGRAVITY_ACCESS_TOKEN", raising=False)
+        monkeypatch.setattr(
+            "cclimits.ANTIGRAVITY_TOKEN_PATHS",
+            [token_file],
+        )
+
+        creds = get_antigravity_credentials()
+
+        assert creds is not None
+        assert creds["source"] == "file"
+        assert creds["access_token"] == "ya29.test-access"
+        assert creds["refresh_token"] == "1//test-refresh"
 
 
 class TestGetZaiUsage:
