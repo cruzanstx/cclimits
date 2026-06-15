@@ -23,10 +23,10 @@ class TestCLIArgumentParsing:
         captured = capsys.readouterr()
         assert "Claude, Codex, Gemini, Z.AI" in captured.out
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits'])
     def test_no_flags_checks_all(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test no flags checks all tools."""
@@ -43,14 +43,17 @@ class TestCLIArgumentParsing:
         mock_gemini.assert_called_once()
         mock_zai.assert_called_once()
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--claude'])
     def test_claude_only(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test --claude flag checks only Claude."""
         mock_claude.return_value = {"status": "ok", "five_hour": {"used": "45.5%"}}
+        mock_codex.return_value = {"error": "No credentials"}
+        mock_gemini.return_value = {"error": "No credentials"}
+        mock_zai.return_value = {"error": "No credentials"}
 
         main()
 
@@ -60,10 +63,10 @@ class TestCLIArgumentParsing:
         mock_gemini.assert_not_called()
         mock_zai.assert_not_called()
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--codex'])
     def test_codex_only(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test --codex flag checks only Codex."""
@@ -76,10 +79,10 @@ class TestCLIArgumentParsing:
         mock_gemini.assert_not_called()
         mock_zai.assert_not_called()
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--gemini'])
     def test_gemini_only(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test --gemini flag checks only Gemini."""
@@ -92,10 +95,10 @@ class TestCLIArgumentParsing:
         mock_gemini.assert_called_once()
         mock_zai.assert_not_called()
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--zai'])
     def test_zai_only(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test --zai flag checks only Z.AI."""
@@ -108,10 +111,10 @@ class TestCLIArgumentParsing:
         mock_gemini.assert_not_called()
         mock_zai.assert_called_once()
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--claude', '--codex'])
     def test_multiple_specific_flags(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test multiple specific flags."""
@@ -129,10 +132,10 @@ class TestCLIArgumentParsing:
 class TestJSONOutput:
     """Tests for JSON output mode."""
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--json'])
     def test_json_output_valid(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test --json flag produces valid JSON."""
@@ -153,7 +156,7 @@ class TestJSONOutput:
         assert "zai" in result
         assert result["claude"]["status"] == "ok"
 
-    @patch('lib.cclimits.get_claude_usage')
+    @patch('cclimits.get_claude_usage')
     @patch('sys.argv', ['cclimits', '--json', '--claude'])
     def test_json_output_single_tool(self, mock_claude, capsys):
         """Test JSON output with single tool."""
@@ -171,8 +174,8 @@ class TestJSONOutput:
         assert "codex" not in result
         assert result["claude"]["five_hour"]["used"] == "45.5%"
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
     @patch('sys.argv', ['cclimits', '--json'])
     def test_json_output_with_errors(self, mock_codex, mock_claude, capsys):
         """Test JSON output includes error messages."""
@@ -191,10 +194,10 @@ class TestJSONOutput:
 class TestOnelineOutput:
     """Tests for oneline output mode."""
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--oneline'])
     def test_oneline_default_5h_window(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test --oneline with default 5h window."""
@@ -211,8 +214,8 @@ class TestOnelineOutput:
         assert "Claude: 45.5% (5h)" in captured.out
         assert "Codex: 35.0% (5h)" in captured.out
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
     @patch('sys.argv', ['cclimits', '--oneline', '5h'])
     def test_oneline_explicit_5h_window(self, mock_codex, mock_claude, capsys):
         """Test --oneline 5h explicitly."""
@@ -226,8 +229,8 @@ class TestOnelineOutput:
         assert "Claude: 45.5% (5h)" in captured.out
         assert "Codex: 35.0% (5h)" in captured.out
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
     @patch('sys.argv', ['cclimits', '--oneline', '7d'])
     def test_oneline_7d_window(self, mock_codex, mock_claude, capsys):
         """Test --oneline with 7d window."""
@@ -242,8 +245,8 @@ class TestOnelineOutput:
         assert "Claude: 72.3% (7d)" in captured.out
         assert "Codex: 68.5% (7d)" in captured.out
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
     @patch('sys.argv', ['cclimits', '--oneline', '--claude', '--codex'])
     def test_oneline_with_specific_tools(self, mock_codex, mock_claude, capsys):
         """Test --oneline with specific tools."""
@@ -258,8 +261,8 @@ class TestOnelineOutput:
         assert "Codex:" in captured.out
         assert "Gemini:" not in captured.out  # Should not appear
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
     @patch('sys.argv', ['cclimits', '--oneline'])
     def test_oneline_errors(self, mock_codex, mock_claude, capsys):
         """Test oneline output with errors."""
@@ -277,10 +280,10 @@ class TestOnelineOutput:
 class TestDetailedOutput:
     """Tests for detailed (default) output mode."""
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits'])
     def test_detailed_output_structure(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test detailed output has expected structure."""
@@ -297,11 +300,11 @@ class TestDetailedOutput:
         assert "Claude Code" in captured.out
         assert "OpenAI Codex" in captured.out
         assert "Gemini CLI" in captured.out
-        assert "Z.AI (GLM-4)" in captured.out
+        assert "Z.AI (5h shared - GLM-4.x)" in captured.out
         # Should have completion message
         assert "Done!" in captured.out
 
-    @patch('lib.cclimits.get_claude_usage')
+    @patch('cclimits.get_claude_usage')
     @patch('sys.argv', ['cclimits', '--claude'])
     def test_detailed_single_tool(self, mock_claude, capsys):
         """Test detailed output with single tool."""
@@ -324,8 +327,8 @@ class TestDetailedOutput:
         assert "Gemini CLI" not in captured.out
         assert "Z.AI" not in captured.out
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
     @patch('sys.argv', ['cclimits'])
     def test_detailed_with_errors(self, mock_codex, mock_claude, capsys):
         """Test detailed output with error messages."""
@@ -344,10 +347,10 @@ class TestDetailedOutput:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--oneline', 'invalid'])
     def test_invalid_window_defaults(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test invalid window value defaults to 5h."""
@@ -360,10 +363,10 @@ class TestEdgeCases:
         # Should use 5h as default
         assert "Claude: 45.5% (5h)" in captured.out
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--json', '--oneline'])
     def test_json_priority_over_oneline(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test --json takes priority over --oneline."""
@@ -381,14 +384,17 @@ class TestEdgeCases:
         assert isinstance(result, dict)
         assert "claude" in result
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits', '--oneline', '--json'])
     def test_oneline_json_flag_order(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test flag order doesn't matter (oneline then json)."""
         mock_claude.return_value = {"status": "ok", "five_hour": {"used": "45.5%"}}
+        mock_codex.return_value = {"error": "No credentials"}
+        mock_gemini.return_value = {"error": "No credentials"}
+        mock_zai.return_value = {"error": "No credentials"}
 
         main()
 
@@ -399,7 +405,7 @@ class TestEdgeCases:
         result = json.loads(captured.out)
         assert isinstance(result, dict)
 
-    @patch('lib.cclimits.get_claude_usage')
+    @patch('cclimits.get_claude_usage')
     @patch('sys.argv', ['cclimits', '--oneline', '5h'])
     def test_oneline_no_data(self, mock_claude, capsys):
         """Test oneline when no usage data available."""
@@ -412,10 +418,10 @@ class TestEdgeCases:
         # Should still print something, even if minimal
         assert len(captured.out) > 0 or captured.out == ""
 
-    @patch('lib.cclimits.get_claude_usage')
-    @patch('lib.cclimits.get_codex_usage')
-    @patch('lib.cclimits.get_gemini_usage')
-    @patch('lib.cclimits.get_zai_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_zai_usage')
     @patch('sys.argv', ['cclimits'])
     def test_all_tools_with_various_statuses(self, mock_zai, mock_gemini, mock_codex, mock_claude, capsys):
         """Test detailed output with mixed success/error states."""
@@ -432,7 +438,7 @@ class TestEdgeCases:
         assert "Claude Code" in captured.out
         assert "OpenAI Codex" in captured.out
         assert "Gemini CLI" in captured.out
-        assert "Z.AI (GLM-4)" in captured.out
+        assert "Z.AI (5h shared - GLM-4.x)" in captured.out
         # Mixed statuses should be visible
         assert "Token expired" in captured.out
         assert "Authenticated" in captured.out

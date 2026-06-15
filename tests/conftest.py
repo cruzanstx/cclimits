@@ -12,6 +12,15 @@ import pytest
 
 # Add lib directory to path so we can import cclimits
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
+import cclimits
+
+
+@pytest.fixture(autouse=True)
+def isolated_cache(tmp_path, monkeypatch):
+    """Keep CLI tests from reading or writing the user's real cclimits cache."""
+    cache_dir = tmp_path / "cclimits-cache"
+    monkeypatch.setattr(cclimits, "CACHE_DIR", cache_dir)
+    monkeypatch.setattr(cclimits, "CACHE_FILE", cache_dir / "usage.json")
 
 
 @pytest.fixture
@@ -190,20 +199,20 @@ def temp_credential_dir(tmp_path):
 @pytest.fixture
 def mock_requests_available():
     """Mock HAS_REQUESTS = True."""
-    with patch('lib.cclimits.HAS_REQUESTS', True):
-        with patch('lib.cclimits.requests') as mock_req:
+    with patch('cclimits.HAS_REQUESTS', True):
+        with patch('cclimits.requests') as mock_req:
             yield mock_req
 
 
 @pytest.fixture
 def mock_requests_unavailable():
     """Mock HAS_REQUESTS = False."""
-    with patch('lib.cclimits.HAS_REQUESTS', False):
+    with patch('cclimits.HAS_REQUESTS', False):
         yield
 
 
 @pytest.fixture
 def mock_subprocess():
     """Mock subprocess module."""
-    with patch('lib.cclimits.subprocess') as mock_sub:
+    with patch('cclimits.subprocess') as mock_sub:
         yield mock_sub

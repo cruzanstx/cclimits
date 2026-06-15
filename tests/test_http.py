@@ -3,6 +3,7 @@ Tests for HTTP client functions (requests and urllib fallback).
 """
 
 import json
+import urllib.error
 from unittest.mock import patch, MagicMock
 import pytest
 from cclimits import http_get, http_post
@@ -112,11 +113,10 @@ class TestHTTPGetWithUrllib:
         assert data == "plain text response"
 
     @patch('cclimits.HAS_REQUESTS', False)
-    @patch('cclimits.urllib.error.HTTPError')
     @patch('cclimits.urllib.request.urlopen')
-    def test_http_error(self, mock_urlopen, mock_http_error):
+    def test_http_error(self, mock_urlopen):
         """Test HTTP error (e.g., 404, 401)."""
-        mock_urlopen.side_effect = mock_http_error(404, "Not Found", {}, None)
+        mock_urlopen.side_effect = urllib.error.HTTPError("https://example.com/notfound", 404, "Not Found", {}, None)
 
         status, data = http_get("https://example.com/notfound", {})
 
@@ -246,11 +246,10 @@ class TestHTTPPostWithUrllib:
         assert data == "OK"
 
     @patch('cclimits.HAS_REQUESTS', False)
-    @patch('cclimits.urllib.error.HTTPError')
     @patch('cclimits.urllib.request.urlopen')
-    def test_http_error(self, mock_urlopen, mock_http_error):
+    def test_http_error(self, mock_urlopen):
         """Test HTTP error on POST."""
-        mock_urlopen.side_effect = mock_http_error(401, "Unauthorized", {}, None)
+        mock_urlopen.side_effect = urllib.error.HTTPError("https://example.com/api", 401, "Unauthorized", {}, None)
 
         status, data = http_post("https://example.com/api", {}, {})
 

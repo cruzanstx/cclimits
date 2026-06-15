@@ -16,6 +16,7 @@
 ## Current Status
 
 - ✅ All core AI tool integrations functional (Claude, Codex, Gemini, Antigravity, Z.AI, OpenRouter, Kimi)
+- ✅ Full local pytest suite passes with isolated cache and module-level patch targets
 - ✅ Cross-platform credential detection (macOS/Linux)
 - ✅ npm package published as `cclimits`
 - ✅ Gemini models grouped by quota tier (3-Flash, Flash, Pro)

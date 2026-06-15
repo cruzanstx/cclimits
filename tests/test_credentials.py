@@ -59,16 +59,18 @@ class TestGetClaudeCredentials:
         # Should fallback to file or env, which won't exist
         assert token is None or isinstance(token, str)
 
+    @patch('cclimits.Path.exists', return_value=False)
     @patch('cclimits.os.environ.get')
-    def test_env_variable(self, mock_get):
+    def test_env_variable(self, mock_get, mock_exists):
         """Test Claude credentials from environment variable."""
         mock_get.return_value = "env-token"
 
         token = get_claude_credentials()
         assert token == "env-token"
 
+    @patch('cclimits.Path.exists', return_value=False)
     @patch('cclimits.os.environ.get')
-    def test_no_credentials(self, mock_get):
+    def test_no_credentials(self, mock_get, mock_exists):
         """Test when no credentials are found."""
         mock_get.return_value = None
 

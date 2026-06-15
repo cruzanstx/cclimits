@@ -153,7 +153,7 @@ def get_openrouter_usage() -> dict:
 
 def http_get(url: str, headers: dict) -> tuple[int, dict | str]:
     """Make HTTP GET request, return (status_code, response_data)"""
-    if requests is not None:
+    if HAS_REQUESTS and requests is not None:
         try:
             resp = requests.get(url, headers=headers, timeout=10)
             try:
@@ -161,16 +161,16 @@ def http_get(url: str, headers: dict) -> tuple[int, dict | str]:
             except:
                 return resp.status_code, resp.text
         except Exception as e:
-            return 0, str(e)
+            return 0, f"Connection error: {e}"
     else:
         req = urllib.request.Request(url, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = resp.read().decode('utf-8')
-                try:
-                    return resp.status, json.loads(data)
-                except:
-                    return resp.status, data
+            resp = urllib.request.urlopen(req, timeout=10)
+            data = resp.read().decode('utf-8')
+            try:
+                return resp.status, json.loads(data)
+            except:
+                return resp.status, data
         except urllib.error.HTTPError as e:
             return e.code, e.reason
         except Exception as e:
@@ -179,7 +179,7 @@ def http_get(url: str, headers: dict) -> tuple[int, dict | str]:
 
 def http_post(url: str, headers: dict, body: dict) -> tuple[int, dict | str]:
     """Make HTTP POST request, return (status_code, response_data)"""
-    if requests is not None:
+    if HAS_REQUESTS and requests is not None:
         try:
             resp = requests.post(url, headers=headers, json=body, timeout=10)
             try:
@@ -187,7 +187,7 @@ def http_post(url: str, headers: dict, body: dict) -> tuple[int, dict | str]:
             except:
                 return resp.status_code, resp.text
         except Exception as e:
-            return 0, str(e)
+            return 0, f"Connection error: {e}"
     else:
         req = urllib.request.Request(
             url,
@@ -196,12 +196,12 @@ def http_post(url: str, headers: dict, body: dict) -> tuple[int, dict | str]:
             method='POST'
         )
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = resp.read().decode('utf-8')
-                try:
-                    return resp.status, json.loads(data)
-                except:
-                    return resp.status, data
+            resp = urllib.request.urlopen(req, timeout=10)
+            data = resp.read().decode('utf-8')
+            try:
+                return resp.status, json.loads(data)
+            except:
+                return resp.status, data
         except urllib.error.HTTPError as e:
             return e.code, e.reason
         except Exception as e:
@@ -1199,15 +1199,19 @@ def print_section(name: str, data: dict):
         fh = data["five_hour"]
         print(f"\n  5-Hour Window:")
         print(f"    Used:      {fh['used']}")
-        print(f"    Remaining: {fh['remaining']}")
-        print(f"    Resets in: {fh['resets_in']}")
+        if "remaining" in fh:
+            print(f"    Remaining: {fh['remaining']}")
+        if "resets_in" in fh:
+            print(f"    Resets in: {fh['resets_in']}")
 
     if "seven_day" in data:
         sd = data["seven_day"]
         print(f"\n  7-Day Window:")
         print(f"    Used:      {sd['used']}")
-        print(f"    Remaining: {sd['remaining']}")
-        print(f"    Resets in: {sd['resets_in']}")
+        if "remaining" in sd:
+            print(f"    Remaining: {sd['remaining']}")
+        if "resets_in" in sd:
+            print(f"    Resets in: {sd['resets_in']}")
 
     if "opus" in data:
         print(f"\n  Opus (7-day): {data['opus']['used']} used")
@@ -1221,7 +1225,8 @@ def print_section(name: str, data: dict):
         window = pw.get("window", "5h")
         print(f"\n  {window} Window:")
         print(f"    Used:      {pw['used']}")
-        print(f"    Remaining: {pw['remaining']}")
+        if "remaining" in pw:
+            print(f"    Remaining: {pw['remaining']}")
         if "resets_in" in pw:
             print(f"    Resets in: {pw['resets_in']}")
 
@@ -1230,7 +1235,8 @@ def print_section(name: str, data: dict):
         window = sw.get("window", "7d")
         print(f"\n  {window} Window:")
         print(f"    Used:      {sw['used']}")
-        print(f"    Remaining: {sw['remaining']}")
+        if "remaining" in sw:
+            print(f"    Remaining: {sw['remaining']}")
         if "resets_in" in sw:
             print(f"    Resets in: {sw['resets_in']}")
 

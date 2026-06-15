@@ -4,8 +4,9 @@
 
 - Changed Antigravity compact output to display used percentage (`100 - min_remaining_pct`) instead of remaining percentage, matching Claude/Codex usage-oriented semantics
 - Added oneline regression coverage and updated README examples
+- Fixed full test-suite isolation for module patching, cache writes, urllib fallback tests, and minimal detailed-output fixtures
 
-**Files:** `lib/cclimits.py`, `tests/test_output.py`, `README.md`, `memory-bank/deltas.md`, `memory-bank/progress.md`
+**Files:** `lib/cclimits.py`, `tests/conftest.py`, `tests/test_cli.py`, `tests/test_credentials.py`, `tests/test_http.py`, `tests/test_output.py`, `README.md`, `memory-bank/deltas.md`, `memory-bank/progress.md`
 
 ## 2026-05-31: Antigravity Live Test + File-Based Credential Discovery
 
