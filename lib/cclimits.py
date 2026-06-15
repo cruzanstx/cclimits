@@ -1587,7 +1587,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
             min_pct = int(summary.get("min_remaining_pct", 0))
             model_count = int(summary.get("model_count", 0))
             used_pct = max(0, 100 - min_pct)
-            pct_str = f"{min_pct}%"
+            pct_str = f"{used_pct}%"
             if use_color:
                 parts.append(f"Antigravity: {colorize_pct(pct_str, used_pct)} ({model_count} models)")
             else:

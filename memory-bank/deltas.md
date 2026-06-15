@@ -1,5 +1,12 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-06-15: Antigravity Oneline Usage Normalization
+
+- Changed Antigravity compact output to display used percentage (`100 - min_remaining_pct`) instead of remaining percentage, matching Claude/Codex usage-oriented semantics
+- Added oneline regression coverage and updated README examples
+
+**Files:** `lib/cclimits.py`, `tests/test_output.py`, `README.md`, `memory-bank/deltas.md`, `memory-bank/progress.md`
+
 ## 2026-05-31: Antigravity Live Test + File-Based Credential Discovery
 
 - Verified end-to-end against a real `agy` install — returned 20 models, project ID, free-tier

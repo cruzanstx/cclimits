@@ -19,7 +19,7 @@
 - ✅ Cross-platform credential detection (macOS/Linux)
 - ✅ npm package published as `cclimits`
 - ✅ Gemini models grouped by quota tier (3-Flash, Flash, Pro)
-- ✅ Antigravity models sorted by tightest remaining quota with min/avg summary
+- ✅ Antigravity models sorted by tightest remaining quota with min/avg summary; compact oneline displays tightest model usage percentage
 - ✅ Research on additional providers completed (`research/ai-coding-providers.md`)
 
 ## Known Issues

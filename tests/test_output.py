@@ -380,6 +380,25 @@ class TestPrintOneline:
         assert "Flash 35.0%" in captured.out
         assert "Pro 60.0%" in captured.out
 
+    def test_antigravity_in_oneline_shows_usage(self, capsys):
+        """Test Antigravity oneline output displays usage, not remaining quota."""
+        results = {
+            "antigravity": {
+                "status": "ok",
+                "summary": {
+                    "model_count": 20,
+                    "min_remaining_pct": 96,
+                    "avg_remaining_pct": 99,
+                },
+            }
+        }
+
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+
+        assert "Antigravity: 4% (20 models)" in captured.out
+        assert "96%" not in captured.out
+
     def test_high_usage_icons(self, capsys):
         """Test status icons for high usage."""
         results = {
