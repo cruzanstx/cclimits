@@ -1,5 +1,14 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-06-26: Python 3.9+ Compatibility (PR #1)
+
+- Merged PR #1 from @Elyter: added `from __future__ import annotations` to defer evaluation of PEP 604 `X | None` unions
+- Bumped stated minimum from Python 3.10+ → 3.9+ across README, `bin/cclimits.js` error message, CLAUDE.md, and memory-bank files
+- Verified no `match` statements remain in `lib/cclimits.py`, so the `__future__` import is sufficient for 3.9 support
+- Released as 1.2.13
+
+**Files:** `lib/cclimits.py`, `README.md`, `bin/cclimits.js`, `CLAUDE.md`, `memory-bank/projectbrief.md`, `memory-bank/techContext.md`
+
 ## 2026-06-15: Antigravity Oneline Usage Normalization
 
 - Changed Antigravity compact output to display used percentage (`100 - min_remaining_pct`) instead of remaining percentage, matching Claude/Codex usage-oriented semantics
