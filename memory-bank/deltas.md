@@ -1,5 +1,16 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-06-27: Synthetic.new Provider
+
+- Added Synthetic.new support via `--synthetic` (env: `SYNTHETIC_API_KEY` / `SYNTHETIC_KEY`)
+- Hits `GET https://api.synthetic.new/v2/quotas` (Bearer auth) — `/quotas` requests don't count against the subscription
+- Exposes all three primary buckets: `daily_subscription` (period requests), `rolling_5h` (5h token tick), `weekly_credits` (USD credits with regen tick)
+- One-line mapping: `5h` → rolling 5h used %, `7d` → weekly credit used %, `both` → `5h%/7d%`
+- Added timezone-aware `_format_resets_in()` helper (Python 3.9 fromisoformat-compatible) for ISO-8601 `Z` timestamps
+- Updated detailed/oneline/JSON paths plus README, CLAUDE.md endpoints table, and credential discovery section
+
+**Files:** `lib/cclimits.py`, `README.md`, `CLAUDE.md`, `memory-bank/deltas.md`
+
 ## 2026-06-26: Python 3.9+ Compatibility (PR #1)
 
 - Merged PR #1 from @Elyter: added `from __future__ import annotations` to defer evaluation of PEP 604 `X | None` unions

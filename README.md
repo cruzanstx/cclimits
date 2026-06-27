@@ -1,6 +1,6 @@
 # cclimits
 
-Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI, OpenRouter, and Kimi K2 (Moonshot AI). It also supports checking keys used by **Aider** and **Continue**.
+Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI, OpenRouter, Kimi K2 (Moonshot AI), and Synthetic.new. It also supports checking keys used by **Aider** and **Continue**.
 
 ## Features
 
@@ -48,6 +48,7 @@ cclimits --zai        # Z.AI only
 cclimits --openrouter # OpenRouter only
 cclimits --kimi       # Kimi only
 cclimits --antigravity # Google Antigravity only
+cclimits --synthetic  # Synthetic.new only
 cclimits --json       # JSON output
 cclimits --oneline           # Compact one-liner (5h window)
 cclimits --oneline 7d        # Compact one-liner (7d window)
@@ -166,6 +167,25 @@ Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91 | Antigr
     claude-opus-4-5-thinking               65%  2026-05-30T18:00:00Z
     claude-sonnet-4-6                      71%  2026-05-30T18:00:00Z
     gemini-3-flash                         88%  2026-05-30T18:00:00Z
+
+==================================================
+  Synthetic.new
+==================================================
+  ✅ Connected
+
+  Subscription:
+    Used:      0 / 1,500 (0%)
+    Remaining: 1,500
+    Renews in: 4h 59m
+
+  5-Hour Rolling:
+    Used:      0 / 1,500 (0%)
+    Remaining: 1,500
+    Next tick: 0h 1m
+
+  Weekly Credits:
+    Remaining: $72.00 / $72.00 (100%)
+    Next regen: 2h 53m (+$1.44)
 ```
 
 ## Status Icons
@@ -190,6 +210,7 @@ Credentials are auto-discovered from these locations:
 | **OpenRouter** | `$OPENROUTER_API_KEY` environment variable |
 | **Kimi** | `$MOONSHOT_API_KEY` environment variable |
 | **Antigravity** | `~/.gemini/antigravity-cli/antigravity-oauth-token` (auto-refreshes); fallback `$ANTIGRAVITY_REFRESH_TOKEN` / `$ANTIGRAVITY_ACCESS_TOKEN` |
+| **Synthetic.new** | `$SYNTHETIC_API_KEY` environment variable |
 
 ## Setup (One-Time)
 
@@ -203,6 +224,7 @@ agy -p hello                 # Login to Google Antigravity (prompts for OAuth)
 export ZAI_KEY=your-key           # Add to ~/.zshrc or ~/.bashrc
 export OPENROUTER_API_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
 export MOONSHOT_API_KEY=your-key    # Add to ~/.zshrc or ~/.bashrc
+export SYNTHETIC_API_KEY=your-key   # Add to ~/.zshrc or ~/.bashrc
 ```
 
 ### Antigravity Authentication

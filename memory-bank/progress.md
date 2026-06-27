@@ -9,13 +9,14 @@
 - **Z.AI**: API token from environment variable (`$ZAI_KEY` or `$ZAI_API_KEY`), 5h shared quota
 - **OpenRouter**: API token from environment variable (`$OPENROUTER_API_KEY`)
 - **Kimi K2 (Moonshot)**: API token from env var (`$MOONSHOT_API_KEY`), prepaid balance tracking
+- **Synthetic.new**: API token from env var (`$SYNTHETIC_API_KEY`), reports subscription/rolling-5h/weekly-credits buckets via `GET /v2/quotas` (free probe)
 - **Display modes**: JSON, detailed, compact one-liner, noemoji color mode
-- **Time windows**: 5h and 7d for Claude/Codex, 5h for Z.AI (shared across GLM models)
+- **Time windows**: 5h and 7d for Claude/Codex, 5h for Z.AI (shared across GLM models), 5h rolling + weekly credits for Synthetic.new
 - **BYOK Support**: Explicit documentation for monitoring Aider/Continue via their underlying provider keys.
 
 ## Current Status
 
-- ✅ All core AI tool integrations functional (Claude, Codex, Gemini, Antigravity, Z.AI, OpenRouter, Kimi)
+- ✅ All core AI tool integrations functional (Claude, Codex, Gemini, Antigravity, Z.AI, OpenRouter, Kimi, Synthetic.new)
 - ✅ Full local pytest suite passes with isolated cache and module-level patch targets
 - ✅ Cross-platform credential detection (macOS/Linux)
 - ✅ npm package published as `cclimits`

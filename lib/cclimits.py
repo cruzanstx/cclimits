@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 AI CLI Usage Checker
-Fetches remaining quota/usage for Claude Code, Codex, Gemini, and Z.AI
+Fetches remaining quota/usage for Claude Code, Codex, Gemini, Z.AI, OpenRouter,
+Kimi, Google Antigravity, and Synthetic.new
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Optional: use requests if available, fallback to urllib
@@ -1175,6 +1176,113 @@ def get_antigravity_usage() -> dict:
     return {"error": "API error", "details": last_error or "No Antigravity endpoint returned quota data"}
 
 
+### Synthetic.new Functions
+
+def get_synthetic_credentials() -> str | None:
+    """Get Synthetic.new API key from environment variables"""
+    for var in ["SYNTHETIC_API_KEY", "SYNTHETIC_KEY"]:
+        if key := os.environ.get(var):
+            return key
+    return None
+
+
+def _format_resets_in(iso_ts: str) -> str | None:
+    """Format an ISO-8601 'Z' timestamp as 'Xd Yh' / 'Xh Ym' delta from now (UTC)."""
+    if not iso_ts:
+        return None
+    try:
+        s = iso_ts.rstrip("Z")
+        # strip subsecond precision so Python 3.9's fromisoformat is happy
+        if "." in s:
+            s = s.split(".")[0]
+        target = datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+        delta_secs = int((target - datetime.now(timezone.utc)).total_seconds())
+        if delta_secs <= 0:
+            return None
+        if delta_secs >= 86400:
+            days, remainder = divmod(delta_secs, 86400)
+            hours = remainder // 3600
+            return f"{days}d {hours}h"
+        hours, remainder = divmod(delta_secs, 3600)
+        minutes = remainder // 60
+        return f"{hours}h {minutes}m"
+    except Exception:
+        return None
+
+
+def get_synthetic_usage() -> dict:
+    """Fetch Synthetic.new subscription / rolling-5h / weekly-credit quotas."""
+    api_key = get_synthetic_credentials()
+    if not api_key:
+        return {
+            "error": "No credentials found",
+            "hint": "Set SYNTHETIC_API_KEY environment variable",
+            "dashboard": "https://synthetic.new"
+        }
+
+    headers = {"Authorization": f"Bearer {api_key}"}
+    status, data = http_get("https://api.synthetic.new/v2/quotas", headers)
+
+    if status != 200 or not isinstance(data, dict):
+        return {
+            "error": f"API error (HTTP {status})",
+            "details": data if isinstance(data, str) else json.dumps(data)[:200],
+            "dashboard": "https://synthetic.new"
+        }
+
+    result: dict = {"status": "ok"}
+
+    # Daily subscription bucket
+    sub = data.get("subscription") or {}
+    if isinstance(sub, dict) and sub.get("limit") is not None:
+        limit = int(sub.get("limit") or 0)
+        used = int(sub.get("requests") or 0)
+        remaining = max(0, limit - used)
+        pct = int(round((used / limit) * 100)) if limit > 0 else 0
+        result["daily_subscription"] = {
+            "limit": limit,
+            "used": used,
+            "remaining": remaining,
+            "percentage": pct,
+        }
+        if resets := _format_resets_in(sub.get("renewsAt", "")):
+            result["daily_subscription"]["resets_in"] = resets
+
+    # Rolling 5h bucket
+    r5h = data.get("rollingFiveHourLimit") or {}
+    if isinstance(r5h, dict) and r5h.get("max") is not None:
+        limit = int(r5h.get("max") or 0)
+        remaining = int(r5h.get("remaining") or 0)
+        used = max(0, limit - remaining)
+        pct = int(round((used / limit) * 100)) if limit > 0 else 0
+        result["rolling_5h"] = {
+            "limit": limit,
+            "used": used,
+            "remaining": remaining,
+            "percentage": pct,
+            "limited": bool(r5h.get("limited", False)),
+        }
+        if resets := _format_resets_in(r5h.get("nextTickAt", "")):
+            result["rolling_5h"]["next_tick_in"] = resets
+
+    # Weekly credit bucket
+    wk = data.get("weeklyTokenLimit") or {}
+    if isinstance(wk, dict) and wk.get("percentRemaining") is not None:
+        pct_remaining = int(wk.get("percentRemaining") or 0)
+        result["weekly_credits"] = {
+            "percent_remaining": pct_remaining,
+            "percent_used": max(0, 100 - pct_remaining),
+            "max_credits": str(wk.get("maxCredits", "")),
+            "remaining_credits": str(wk.get("remainingCredits", "")),
+            "next_regen_credits": str(wk.get("nextRegenCredits", "")),
+        }
+        if regen := _format_resets_in(wk.get("nextRegenAt", "")):
+            result["weekly_credits"]["next_regen_in"] = regen
+
+    result["hint"] = "Dashboard: https://synthetic.new"
+    return result
+
+
 def print_section(name: str, data: dict):
     """Pretty print a section"""
     print(f"\n{'='*50}")
@@ -1338,6 +1446,35 @@ def print_section(name: str, data: dict):
         print(f"    API Calls: {wu['calls']:,}")
         print(f"    Tokens:    {wu['tokens']:,}")
 
+    # Synthetic.new (subscription + rolling 5h + weekly credits)
+    if "daily_subscription" in data:
+        ds = data["daily_subscription"]
+        print(f"\n  Subscription:")
+        print(f"    Used:      {ds['used']:,} / {ds['limit']:,} ({ds['percentage']}%)")
+        print(f"    Remaining: {ds['remaining']:,}")
+        if "resets_in" in ds:
+            print(f"    Renews in: {ds['resets_in']}")
+
+    if "rolling_5h" in data:
+        r5h = data["rolling_5h"]
+        print(f"\n  5-Hour Rolling:")
+        print(f"    Used:      {r5h['used']:,} / {r5h['limit']:,} ({r5h['percentage']}%)")
+        print(f"    Remaining: {r5h['remaining']:,}")
+        if r5h.get("limited"):
+            print(f"    ⚠️  Currently rate-limited")
+        if "next_tick_in" in r5h:
+            print(f"    Next tick: {r5h['next_tick_in']}")
+
+    if "weekly_credits" in data:
+        wc = data["weekly_credits"]
+        print(f"\n  Weekly Credits:")
+        print(f"    Remaining: {wc['remaining_credits']} / {wc['max_credits']} ({wc['percent_remaining']}%)")
+        if wc.get("next_regen_credits"):
+            extra = f" (+{wc['next_regen_credits']})"
+        else:
+            extra = ""
+        if "next_regen_in" in wc:
+            print(f"    Next regen: {wc['next_regen_in']}{extra}")
 
     # OpenRouter-specific
     if "balance_usd" in data:
@@ -1498,6 +1635,34 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
         elif "error" in data:
             parts.append(f"Z.AI: {error_icon}")
 
+    # Synthetic.new (5h rolling + weekly credits)
+    if "synthetic" in results:
+        data = results["synthetic"]
+        if data.get("status") == "ok":
+            pct_5h = data.get("rolling_5h", {}).get("percentage")
+            pct_7d = data.get("weekly_credits", {}).get("percent_used")
+            if window == "both" and pct_5h is not None and pct_7d is not None:
+                max_pct = max(float(pct_5h), float(pct_7d))
+                pct_display = f"{pct_5h}%/{pct_7d}%"
+                if use_color:
+                    parts.append(f"Synthetic: {colorize_pct(pct_display, max_pct)}")
+                else:
+                    parts.append(f"Synthetic: {pct_display} {get_status_icon(max_pct)}")
+            elif window == "7d" and pct_7d is not None:
+                pct_str = f"{pct_7d}% (7d)"
+                if use_color:
+                    parts.append(f"Synthetic: {colorize_pct(pct_str, float(pct_7d))}")
+                else:
+                    parts.append(f"Synthetic: {pct_str} {get_status_icon(float(pct_7d))}")
+            elif pct_5h is not None:
+                pct_str = f"{pct_5h}% (5h)"
+                if use_color:
+                    parts.append(f"Synthetic: {colorize_pct(pct_str, float(pct_5h))}")
+                else:
+                    parts.append(f"Synthetic: {pct_str} {get_status_icon(float(pct_5h))}")
+        elif "error" in data:
+            parts.append(f"Synthetic: {error_icon}")
+
     # Gemini (group by quota tier)
     if "gemini" in results:
         data = results["gemini"]
@@ -1618,20 +1783,23 @@ Credential Locations (auto-discovered):
   OpenRouter $OPENROUTER_API_KEY environment variable
   Kimi       $MOONSHOT_API_KEY environment variable
   Antigravity system keyring, or $ANTIGRAVITY_REFRESH_TOKEN
+  Synthetic  $SYNTHETIC_API_KEY environment variable
 
 Setup (one-time):
   claude           # Login to Claude Code
   codex login      # Login to OpenAI Codex
   gemini           # Login to Gemini CLI
   antigravity auth login  # Login to Google Antigravity
-  export ZAI_KEY=your-key       # Add to ~/.zshrc or ~/.bashrc
-  export MOONSHOT_API_KEY=key   # Add to ~/.zshrc or ~/.bashrc
+  export ZAI_KEY=your-key         # Add to ~/.zshrc or ~/.bashrc
+  export MOONSHOT_API_KEY=key     # Add to ~/.zshrc or ~/.bashrc
+  export SYNTHETIC_API_KEY=key    # Add to ~/.zshrc or ~/.bashrc
 
 Examples:
   cclimits              # Check all tools (detailed)
   cclimits --claude     # Claude only
   cclimits --kimi       # Kimi only
   cclimits --antigravity # Antigravity only
+  cclimits --synthetic  # Synthetic.new only
   cclimits --json       # JSON output
   cclimits --oneline      # Compact one-liner (5h window)
   cclimits --oneline 7d   # Compact one-liner (7d window)
@@ -1639,11 +1807,11 @@ Examples:
 
 Example Output:
   # One-liner (5h window)
-  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ ... ) | Kimi: $49.59 ✅ | Antigravity: 65% (8 models) ✅
+  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ ... ) | Kimi: $49.59 ✅ | Antigravity: 65% (8 models) ✅ | Synthetic: 0% (5h) ✅
 """
 
     parser = argparse.ArgumentParser(
-        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI, OpenRouter, Kimi, Antigravity",
+        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI, OpenRouter, Kimi, Antigravity, Synthetic.new",
         epilog=epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -1659,6 +1827,7 @@ Example Output:
     parser.add_argument("--openrouter", action="store_true", help="Only check OpenRouter")
     parser.add_argument("--kimi", action="store_true", help="Only check Kimi (Moonshot AI)")
     parser.add_argument("--antigravity", action="store_true", help="Only check Google Antigravity")
+    parser.add_argument("--synthetic", action="store_true", help="Only check Synthetic.new")
     parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
     parser.add_argument("--cache-ttl", type=int, metavar="SECONDS",
                         help="Override default TTL (default: 60, implies --cached)")
@@ -1676,7 +1845,7 @@ Example Output:
             results = cached_results
 
     # If no specific tool selected, check all
-    check_all = not (args.claude or args.codex or args.gemini or args.zai or args.openrouter or args.kimi or args.antigravity)
+    check_all = not (args.claude or args.codex or args.gemini or args.zai or args.openrouter or args.kimi or args.antigravity or args.synthetic)
 
     skip_fetch = results is not None
     if not skip_fetch:
@@ -1696,6 +1865,8 @@ Example Output:
         results["kimi"] = get_kimi_usage()
     if args.antigravity or (check_all and get_antigravity_credentials()):
         results["antigravity"] = get_antigravity_usage()
+    if args.synthetic or (check_all and get_synthetic_credentials()):
+        results["synthetic"] = get_synthetic_usage()
 
     # Always write cache for future --cached calls
     if not skip_fetch:
@@ -1724,6 +1895,8 @@ Example Output:
             print_section("Kimi K2 (Moonshot AI)", results["kimi"])
         if "antigravity" in results:
             print_section("Google Antigravity", results["antigravity"])
+        if "synthetic" in results:
+            print_section("Synthetic.new", results["synthetic"])
 
         print("\n" + "="*50)
         print("  Done!")

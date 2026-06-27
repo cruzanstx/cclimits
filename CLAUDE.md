@@ -4,7 +4,7 @@ Project instructions for Claude Code when working in this repository.
 
 ## Quick Orientation
 
-**cclimits** is a CLI tool that checks quota/usage for AI coding assistants (Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI). Distributed via npm, runs Python under the hood.
+**cclimits** is a CLI tool that checks quota/usage for AI coding assistants (Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI, Kimi/Moonshot, OpenRouter, Synthetic.new). Distributed via npm, runs Python under the hood.
 
 **Repository**: https://github.com/cruzanstx/cclimits
 **npm**: https://www.npmjs.com/package/cclimits
@@ -103,6 +103,7 @@ git push --tags
 | Z.AI | `api.z.ai/api/monitor/usage/quota/limit` | `Authorization: {api_key}` |
 | OpenRouter | `openrouter.ai/api/v1/credits` | `Authorization: Bearer {api_key}` |
 | Kimi (Moonshot) | `api.moonshot.ai/v1/users/me/balance` | `Authorization: Bearer {api_key}` |
+| Synthetic.new | `api.synthetic.new/v2/quotas` | `Authorization: Bearer {api_key}` |
 
 ## Testing Checklist
 
@@ -120,4 +121,5 @@ Before publishing:
 3. **Antigravity credentials**: Read from `~/.gemini/antigravity-cli/antigravity-oauth-token` (written by `agy` CLI). Falls back to `ANTIGRAVITY_REFRESH_TOKEN` / `ANTIGRAVITY_ACCESS_TOKEN` if absent
 4. **Z.AI**: 5h shared quota across GLM-4.7, GLM-4.6, GLM-4.5V, GLM-4.5, GLM-4.5-Air, and Visual Analysis
 5. **Codex API key mode**: No quota info (only OAuth has it)
-6. **Windows**: Untested, may have path issues
+6. **Synthetic.new**: Reports three buckets — subscription (period requests), rolling 5h tokens, and weekly $ credits. Calls to `/quotas` don't count against any bucket
+7. **Windows**: Untested, may have path issues
