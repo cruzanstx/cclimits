@@ -541,3 +541,24 @@ class TestPrintOnelineEdgeCases:
         print_oneline(results, "invalid")
         captured = capsys.readouterr()
         assert "Claude: 45.5% (5h)" in captured.out
+
+
+class TestOnelineMissingCredentials:
+    """Missing credentials render 🔑 (config issue), not ❌ (outage)."""
+
+    def test_no_creds_shows_key_icon(self, capsys):
+        results = {
+            "zai": {"error": "No credentials found"},
+            "codex": {"error": "Token expired"},
+        }
+        print_oneline(results, "both")
+        captured = capsys.readouterr()
+        assert "Z.AI: 🔑" in captured.out
+        assert "Codex: ❌" in captured.out
+
+    def test_no_creds_noemoji_shows_no_key_text(self, capsys):
+        results = {"zai": {"error": "No credentials found"}}
+        print_oneline(results, "5h", use_color=True)
+        captured = capsys.readouterr()
+        assert "no key" in captured.out
+        assert "ERR" not in captured.out

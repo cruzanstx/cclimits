@@ -1,5 +1,14 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-02: Cache Merge + Missing-Credentials Icon
+
+- `write_cache()` now merges into the existing cache via new `merge_cache_data()`: a provider entry with `error: "No credentials found"` no longer overwrites a previous good entry, and partial runs (e.g. `--zai`) no longer clobber other providers' cached data
+- Rationale: cache is shared across environments (cron/statusline vs interactive shell); a run missing `ZAI_API_KEY` was poisoning the cache, making `--oneline --cached` show `Z.AI: ❌` while a direct probe was healthy
+- `--oneline` now renders missing credentials as 🔑 (`no key` in yellow with `--noemoji`) instead of ❌, distinguishing config issues from API outages; matched on the exact `NO_CREDS_ERROR = "No credentials found"` string all providers use
+- Added tests: `TestMergeCacheData` (test_utils.py), `TestOnelineMissingCredentials` (test_output.py); suite now 136 passing
+
+**Files:** `lib/cclimits.py`, `tests/test_utils.py`, `tests/test_output.py`, `memory-bank/deltas.md`
+
 ## 2026-06-27: Synthetic.new Provider
 
 - Added Synthetic.new support via `--synthetic` (env: `SYNTHETIC_API_KEY` / `SYNTHETIC_KEY`)

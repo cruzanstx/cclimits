@@ -92,14 +92,35 @@ def read_cache(ttl: int) -> dict | None:
     except (json.JSONDecodeError, KeyError, TypeError, OSError, PermissionError):
         return None
 
+NO_CREDS_ERROR = "No credentials found"
+
+def merge_cache_data(old: dict, new: dict) -> dict:
+    """Merge new results over previous cache, keeping earlier good entries
+    for providers this run couldn't check (missing credentials in this
+    environment shouldn't erase data cached from an environment that has them)."""
+    merged = dict(old) if isinstance(old, dict) else {}
+    for key, value in new.items():
+        prev = merged.get(key)
+        if (isinstance(value, dict) and value.get("error") == NO_CREDS_ERROR
+                and isinstance(prev, dict) and prev.get("error") != NO_CREDS_ERROR):
+            continue
+        merged[key] = value
+    return merged
+
 def write_cache(data: dict) -> bool:
     """Write data to cache file, return success status"""
     try:
         cache_file = get_cache_path()
         import time
+        old_data = {}
+        try:
+            with open(cache_file, 'r') as f:
+                old_data = json.load(f).get("data") or {}
+        except (json.JSONDecodeError, KeyError, TypeError, OSError, PermissionError, AttributeError):
+            old_data = {}
         cache_data = {
             "timestamp": time.time(),
-            "data": data
+            "data": merge_cache_data(old_data, data)
         }
         with open(cache_file, 'w') as f:
             json.dump(cache_data, f, indent=2)
@@ -1561,6 +1582,11 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
 
     parts = []
     error_icon = f"{COLORS['bold_red']}ERR{COLORS['reset']}" if use_color else "❌"
+    nokey_icon = f"{COLORS['yellow']}no key{COLORS['reset']}" if use_color else "🔑"
+
+    def fail_icon(data: dict) -> str:
+        """Missing credentials is a config issue, not an outage — show it differently"""
+        return nokey_icon if data.get("error") == NO_CREDS_ERROR else error_icon
 
     # Claude
     if "claude" in results:
@@ -1590,7 +1616,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                 else:
                     parts.append(f"Claude: {pct_str} (7d) {get_status_icon(pct)}")
         elif "error" in data:
-            parts.append(f"Claude: {error_icon}")
+            parts.append(f"Claude: {fail_icon(data)}")
 
     # Codex
     if "codex" in results:
@@ -1620,7 +1646,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                 else:
                     parts.append(f"Codex: {pct_str} (7d) {get_status_icon(pct)}")
         elif "error" in data:
-            parts.append(f"Codex: {error_icon}")
+            parts.append(f"Codex: {fail_icon(data)}")
 
     # Z.AI (5h shared quota across GLM models)
     if "zai" in results:
@@ -1633,7 +1659,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
             else:
                 parts.append(f"Z.AI: {pct_str} {get_status_icon(pct)}")
         elif "error" in data:
-            parts.append(f"Z.AI: {error_icon}")
+            parts.append(f"Z.AI: {fail_icon(data)}")
 
     # Synthetic.new (5h rolling + weekly credits)
     if "synthetic" in results:
@@ -1661,7 +1687,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                 else:
                     parts.append(f"Synthetic: {pct_str} {get_status_icon(float(pct_5h))}")
         elif "error" in data:
-            parts.append(f"Synthetic: {error_icon}")
+            parts.append(f"Synthetic: {fail_icon(data)}")
 
     # Gemini (group by quota tier)
     if "gemini" in results:
@@ -1685,7 +1711,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
             if gemini_parts:
                 parts.append(f"Gemini: ( {' | '.join(gemini_parts)} )")
         elif "error" in data:
-            parts.append(f"Gemini: {error_icon}")
+            parts.append(f"Gemini: {fail_icon(data)}")
 
 
     # OpenRouter
@@ -1716,7 +1742,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                     status_icon = "✅"
                 parts.append(f"OpenRouter: {balance_str} {status_icon}")
         elif "error" in data:
-            parts.append(f"OpenRouter: {error_icon}")
+            parts.append(f"OpenRouter: {fail_icon(data)}")
 
     # Kimi
     if "kimi" in results:
@@ -1749,7 +1775,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
                     status_icon = "✅"
                 parts.append(f"Kimi: {balance_str} {status_icon}")
         elif "error" in data:
-            parts.append(f"Kimi: {error_icon}")
+            parts.append(f"Kimi: {fail_icon(data)}")
 
     # Antigravity
     if "antigravity" in results:
@@ -1765,7 +1791,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
             else:
                 parts.append(f"Antigravity: {pct_str} ({model_count} models) {get_status_icon(used_pct)}")
         elif "error" in data:
-            parts.append(f"Antigravity: {error_icon}")
+            parts.append(f"Antigravity: {fail_icon(data)}")
 
     print(" | ".join(parts))
 

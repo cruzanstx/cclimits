@@ -124,3 +124,47 @@ class TestGetStatusIcon:
         """Test negative percentage (edge case)."""
         result = get_status_icon(-10.0)
         assert result == "✅"
+
+
+class TestMergeCacheData:
+    """Tests for merge_cache_data() cache-preservation logic."""
+
+    def test_no_creds_error_keeps_previous_good_entry(self):
+        from cclimits import merge_cache_data
+        old = {"zai": {"status": "ok", "token_quota": {"percentage": 1}}}
+        new = {"zai": {"error": "No credentials found"}}
+        merged = merge_cache_data(old, new)
+        assert merged["zai"]["status"] == "ok"
+
+    def test_real_error_overwrites_previous_entry(self):
+        from cclimits import merge_cache_data
+        old = {"zai": {"status": "ok"}}
+        new = {"zai": {"error": "API error (500)"}}
+        merged = merge_cache_data(old, new)
+        assert merged["zai"]["error"] == "API error (500)"
+
+    def test_fresh_data_overwrites_old(self):
+        from cclimits import merge_cache_data
+        old = {"claude": {"status": "ok", "five_hour": {"used": "10%"}}}
+        new = {"claude": {"status": "ok", "five_hour": {"used": "20%"}}}
+        merged = merge_cache_data(old, new)
+        assert merged["claude"]["five_hour"]["used"] == "20%"
+
+    def test_partial_run_preserves_other_providers(self):
+        from cclimits import merge_cache_data
+        old = {"claude": {"status": "ok"}, "codex": {"status": "ok"}}
+        new = {"zai": {"status": "ok"}}
+        merged = merge_cache_data(old, new)
+        assert set(merged) == {"claude", "codex", "zai"}
+
+    def test_no_creds_over_no_creds_keeps_error(self):
+        from cclimits import merge_cache_data
+        old = {"zai": {"error": "No credentials found"}}
+        new = {"zai": {"error": "No credentials found"}}
+        merged = merge_cache_data(old, new)
+        assert merged["zai"]["error"] == "No credentials found"
+
+    def test_empty_or_invalid_old_cache(self):
+        from cclimits import merge_cache_data
+        assert merge_cache_data({}, {"zai": {"status": "ok"}}) == {"zai": {"status": "ok"}}
+        assert merge_cache_data(None, {"zai": {"status": "ok"}}) == {"zai": {"status": "ok"}}
