@@ -4,14 +4,15 @@
 
 - **Claude Code**: OAuth token from keychain (macOS) or `~/.claude/.credentials.json` (Linux)
 - **OpenAI Codex**: JWT from `~/.codex/auth.json`
-- **Gemini CLI**: OAuth from `~/.gemini/oauth_creds.json`, auto-refreshes expired tokens
+- **Gemini CLI** (legacy — CLI retired 2026-06-18): OAuth from `~/.gemini/oauth_creds.json`; token refresh needs an installed Gemini CLI package or env overrides, otherwise reports ⏰ expired
 - **Google Antigravity**: OAuth tokens read from `~/.gemini/antigravity-cli/antigravity-oauth-token` (written by `agy` CLI) or `ANTIGRAVITY_REFRESH_TOKEN`; per-model quota tracking, live-verified against real install
 - **Z.AI**: API token from environment variable (`$ZAI_KEY` or `$ZAI_API_KEY`), 5h shared quota
 - **OpenRouter**: API token from environment variable (`$OPENROUTER_API_KEY`)
 - **Kimi K2 (Moonshot)**: API token from env var (`$MOONSHOT_API_KEY`), prepaid balance tracking
 - **Synthetic.new**: API token from env var (`$SYNTHETIC_API_KEY`), reports subscription/rolling-5h/weekly-credits buckets via `GET /v2/quotas` (free probe)
-- **Display modes**: JSON, detailed, compact one-liner, noemoji color mode
-- **Time windows**: 5h and 7d for Claude/Codex, 5h for Z.AI (shared across GLM models), 5h rolling + weekly credits for Synthetic.new
+- **Display modes**: JSON, detailed, compact one-liner, noemoji color mode; oneline distinguishes 🔑 no credentials / ⏰ expired token / ❌ real error
+- **Time windows**: 5h and 7d for Claude/Codex, 5h for Z.AI (shared across GLM models; `both` mode shows tokens%/requests%), 5h rolling + weekly credits for Synthetic.new
+- **Caching** (`--cached`, `~/.cache/cclimits/usage.json`): atomic writes (temp + rename), merge on write (no-creds/partial runs preserve prior good entries), provider filters honored on cache hits (refetch if a requested provider is missing), output labeled with cache age
 - **BYOK Support**: Explicit documentation for monitoring Aider/Continue via their underlying provider keys.
 
 ## Current Status
@@ -34,9 +35,8 @@ None currently.
 - **Replit Integration**: Endpoint identified (`usage-credits-balance`), awaiting implementation.
 
 ### Medium Priority
-- Add automated tests for all integrations
 - CI/CD pipeline for npm publishing
-- Better error messages for missing credentials
+- Gemini legacy OAuth auto-refresh or graceful retirement (CLI retired 2026-06-18; expired token renders ⏰)
 
 ### Low Priority
 - TypeScript rewrite to remove Python dependency

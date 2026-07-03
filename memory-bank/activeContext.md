@@ -2,18 +2,13 @@
 
 ## Current Focus
 
+- Cache robustness + status-visibility hardening complete (v1.2.15–1.2.18, 2026-07-02); back to maintenance
 - Researching additional AI coding providers (Cursor, Copilot, Replit, etc.)
-- Post v1.0.0 maintenance and documentation updates
 
 ## Recent Changes (Last 7 Days)
 
-- **2026-01-11**: Completed research on 8 AI coding providers (`research/ai-coding-providers.md`)
-- **2026-01-11**: Updated README to clarify support for BYOK tools (Aider, Continue)
-- **2026-01-01**: Refactored Gemini display to show quota tiers (3-Flash | Flash | Pro)
-- **2026-01-01**: Published to npm as `cclimits@1.0.0`
-- **2026-01-01**: Added npm/npx distribution (Node wrapper)
-- **2026-01-01**: Created standalone repo from daplug skill
-- **2026-01-01**: Refactored Gemini OAuth to extract from CLI installation (avoid hardcoded secrets)
+- **2026-07-02**: v1.2.15–1.2.18 released — see `deltas.md`: cache merge (no-creds/partial runs no longer clobber good entries), atomic cache writes, provider filters honored on cache hits, cached-output age labels, Z.AI data cleanup (no fake token counts, plan level, tokens%/requests% in `both` mode), distinct oneline icons (🔑 no credentials, ⏰ expired token, ❌ real error)
+- Root cause that kicked this off: a background statusline/cron shell without `ZAI_API_KEY` was poisoning the shared cache, so `--oneline --cached` showed `Z.AI: ❌` while direct probes were healthy
 
 ## Blocked/Waiting
 
@@ -23,8 +18,8 @@
 
 1. Implement Replit support (High feasibility endpoint identified)
 2. Monitor GitHub Copilot/Cursor for future public API availability
-3. Add tests
-4. Add CI/CD for automated npm publishing
+3. Add CI/CD for automated npm publishing
+4. Possible future: Gemini legacy OAuth auto-refresh (CLI retired 2026-06-18; expired token now visible as ⏰ in oneline)
 
 ## Key Patterns
 
