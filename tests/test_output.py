@@ -342,7 +342,7 @@ class TestPrintOneline:
         captured = capsys.readouterr()
 
         assert "Claude: ❌" in captured.out
-        assert "Codex: ❌" in captured.out
+        assert "Codex: ⏰" in captured.out
 
     def test_zai_in_oneline(self, capsys):
         """Test Z.AI in oneline output."""
@@ -554,7 +554,7 @@ class TestOnelineMissingCredentials:
         print_oneline(results, "both")
         captured = capsys.readouterr()
         assert "Z.AI: 🔑" in captured.out
-        assert "Codex: ❌" in captured.out
+        assert "Codex: ⏰" in captured.out
 
     def test_no_creds_noemoji_shows_no_key_text(self, capsys):
         results = {"zai": {"error": "No credentials found"}}
@@ -608,3 +608,31 @@ class TestZaiOnelineBoth:
         print_oneline(results, "5h")
         captured = capsys.readouterr()
         assert "Z.AI: 30.0% (5h)" in captured.out
+
+
+class TestOnelineExpiredToken:
+    """Expired tokens render ⏰ instead of silently vanishing from the line."""
+
+    def test_gemini_expired_token_shown(self, capsys):
+        results = {"gemini": {"token_status": "expired", "hint_refresh": "Run 'gemini' to refresh token"}}
+        print_oneline(results, "both")
+        captured = capsys.readouterr()
+        assert "Gemini: ⏰" in captured.out
+
+    def test_codex_expired_token_shown(self, capsys):
+        results = {"codex": {"auth": "OAuth (ChatGPT)", "token_status": "expired"}}
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+        assert "Codex: ⏰" in captured.out
+
+    def test_claude_token_expired_error_uses_expired_icon(self, capsys):
+        results = {"claude": {"error": "Token expired", "hint": "Run 'claude' to re-authenticate"}}
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+        assert "Claude: ⏰" in captured.out
+
+    def test_expired_noemoji(self, capsys):
+        results = {"gemini": {"token_status": "expired"}}
+        print_oneline(results, "5h", use_color=True)
+        captured = capsys.readouterr()
+        assert "expired" in captured.out

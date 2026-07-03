@@ -1,5 +1,15 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-02: Expired Tokens Visible in Oneline
+
+- Expired OAuth tokens no longer silently vanish from `--oneline`: entries with `token_status: "expired"` (Gemini/Codex 401 paths return these with no `error` key) or `error: "Token expired"` (Claude) now render as ⏰ (`expired` in yellow with `--noemoji`)
+- All 8 provider blocks broadened to catch `token_status == "expired"`; `fail_icon()` picks 🔑 / ⏰ / ❌
+- Found via cache inspection: gemini entry was `{token_status: expired, hint_refresh: ...}` — neither ok nor error, so oneline dropped it entirely
+- README: added status-icon legend and updated `both` examples (Z.AI `tokens%/requests%`)
+- Tests: 155 passing (4 new; 2 stale assertions updated: `error: "Token expired"` now ⏰ not ❌)
+
+**Files:** `lib/cclimits.py`, `tests/test_output.py`, `README.md`, `memory-bank/deltas.md`
+
 ## 2026-07-02: Atomic Cache Writes + Z.AI Dual Value in Both Mode
 
 - `write_cache()` writes to a `.json.tmp` sibling then `os.replace()` — concurrent runs (cron/statusline vs interactive) can no longer observe a half-written cache

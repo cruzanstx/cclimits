@@ -1596,10 +1596,15 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
     parts = []
     error_icon = f"{COLORS['bold_red']}ERR{COLORS['reset']}" if use_color else "❌"
     nokey_icon = f"{COLORS['yellow']}no key{COLORS['reset']}" if use_color else "🔑"
+    expired_icon = f"{COLORS['yellow']}expired{COLORS['reset']}" if use_color else "⏰"
 
     def fail_icon(data: dict) -> str:
-        """Missing credentials is a config issue, not an outage — show it differently"""
-        return nokey_icon if data.get("error") == NO_CREDS_ERROR else error_icon
+        """Missing credentials / expired tokens are config issues, not outages — show them differently"""
+        if data.get("error") == NO_CREDS_ERROR:
+            return nokey_icon
+        if data.get("token_status") == "expired" or data.get("error") == "Token expired":
+            return expired_icon
+        return error_icon
 
     # Claude
     if "claude" in results:
@@ -1628,7 +1633,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
                     parts.append(f"Claude: {colorize_pct(pct_str, pct)} (7d)")
                 else:
                     parts.append(f"Claude: {pct_str} (7d) {get_status_icon(pct)}")
-        elif "error" in data:
+        elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"Claude: {fail_icon(data)}")
 
     # Codex
@@ -1658,7 +1663,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
                     parts.append(f"Codex: {colorize_pct(pct_str, pct)} (7d)")
                 else:
                     parts.append(f"Codex: {pct_str} (7d) {get_status_icon(pct)}")
-        elif "error" in data:
+        elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"Codex: {fail_icon(data)}")
 
     # Z.AI (5h shared quota across GLM models)
@@ -1682,7 +1687,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
                     parts.append(f"Z.AI: {colorize_pct(pct_str, pct)}")
                 else:
                     parts.append(f"Z.AI: {pct_str} {get_status_icon(pct)}")
-        elif "error" in data:
+        elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"Z.AI: {fail_icon(data)}")
 
     # Synthetic.new (5h rolling + weekly credits)
@@ -1710,7 +1715,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
                     parts.append(f"Synthetic: {colorize_pct(pct_str, float(pct_5h))}")
                 else:
                     parts.append(f"Synthetic: {pct_str} {get_status_icon(float(pct_5h))}")
-        elif "error" in data:
+        elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"Synthetic: {fail_icon(data)}")
 
     # Gemini (group by quota tier)
@@ -1734,7 +1739,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
                         break  # Only show once per tier
             if gemini_parts:
                 parts.append(f"Gemini: ( {' | '.join(gemini_parts)} )")
-        elif "error" in data:
+        elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"Gemini: {fail_icon(data)}")
 
 
@@ -1765,7 +1770,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
                 else:
                     status_icon = "✅"
                 parts.append(f"OpenRouter: {balance_str} {status_icon}")
-        elif "error" in data:
+        elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"OpenRouter: {fail_icon(data)}")
 
     # Kimi
@@ -1798,7 +1803,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
                 else:
                     status_icon = "✅"
                 parts.append(f"Kimi: {balance_str} {status_icon}")
-        elif "error" in data:
+        elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"Kimi: {fail_icon(data)}")
 
     # Antigravity
@@ -1814,7 +1819,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
                 parts.append(f"Antigravity: {colorize_pct(pct_str, used_pct)} ({model_count} models)")
             else:
                 parts.append(f"Antigravity: {pct_str} ({model_count} models) {get_status_icon(used_pct)}")
-        elif "error" in data:
+        elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"Antigravity: {fail_icon(data)}")
 
     line = " | ".join(parts)

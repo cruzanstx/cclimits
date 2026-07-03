@@ -68,12 +68,14 @@ cclimits --oneline --cache-ttl 30  # Custom TTL in seconds
 # Single window (5h or 7d)
 Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅ | Kimi: $49.59 ✅ | Antigravity: 35% (8 models) ✅
 
-# Both windows (--oneline both) - shows 5h/7d combined
-Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1% (5h) ✅ | OpenRouter: $47.91 ✅
+# Both windows (--oneline both) - shows 5h/7d combined (Z.AI: tokens%/requests%)
+Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1%/0% ✅ | OpenRouter: $47.91 ✅
 
 # No emoji mode (--noemoji) - colorizes percentages directly (green/yellow/red)
 Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91 | Antigravity: 35% (8 models)
 ```
+
+Status icons: ✅ ok · ⚠️ high usage · ❌ error · 🔑 no credentials found · ⏰ token expired. Cached results (`--cached`) are suffixed with their age, e.g. `(cached 42s)`.
 
 ### Detailed Output (default)
 
