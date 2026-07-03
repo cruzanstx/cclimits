@@ -426,3 +426,48 @@ class TestGeminiTiers:
         """Test 3-Flash tier model IDs."""
         flash3_models = GEMINI_TIERS["3-Flash"]
         assert "gemini-3-flash-preview" in flash3_models
+
+
+class TestZaiSparseQuota:
+    """Z.AI TOKENS_LIMIT often has only percentage + nextResetTime — no fake zeros."""
+
+    @patch('cclimits.get_zai_credentials')
+    @patch('cclimits.http_get')
+    def test_percentage_only_omits_counts(self, mock_get, mock_creds):
+        mock_creds.return_value = "test-api-key"
+
+        def get_side_effect(url, headers, **kwargs):
+            if "quota/limit" in url:
+                return (200, {
+                    "success": True,
+                    "data": {
+                        "level": "max",
+                        "limits": [
+                            {"type": "TOKENS_LIMIT", "percentage": 1, "nextResetTime": 9999999999999},
+                            {"type": "TIME_LIMIT", "usage": 4000, "currentValue": 0, "remaining": 4000},
+                        ]
+                    }
+                })
+            return (500, {})
+
+        mock_get.side_effect = get_side_effect
+        result = get_zai_usage()
+
+        assert result["status"] == "ok"
+        assert result["plan"] == "max"
+        assert result["token_quota"]["percentage"] == 1
+        for absent in ("limit", "used", "remaining"):
+            assert absent not in result["token_quota"]
+        assert result["request_quota"] == {"limit": 4000, "used": 0, "remaining": 4000}
+
+    @patch('cclimits.get_zai_credentials')
+    @patch('cclimits.http_get')
+    def test_all_endpoints_down_reports_error(self, mock_get, mock_creds):
+        """Network/API failure must surface as an explicit error, not a silent empty dict."""
+        mock_creds.return_value = "test-api-key"
+        mock_get.return_value = (0, None)
+
+        result = get_zai_usage()
+
+        assert result["error"] == "Could not fetch usage"
+        assert "status" not in result

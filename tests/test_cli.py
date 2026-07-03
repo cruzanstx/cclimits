@@ -442,3 +442,31 @@ class TestEdgeCases:
         # Mixed statuses should be visible
         assert "Token expired" in captured.out
         assert "Authenticated" in captured.out
+
+
+class TestCachedProviderFilter:
+    """Provider filters must be honored on cache hits (issue: --zai --cached printed everything)."""
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai', '--cached'])
+    def test_filter_applied_to_cache_hit(self, mock_zai, capsys):
+        import cclimits
+        cclimits.write_cache({
+            "claude": {"status": "ok", "five_hour": {"used": "45.5%"}},
+            "zai": {"status": "ok", "token_quota": {"percentage": 30.0}},
+        })
+        main()
+        captured = capsys.readouterr()
+        mock_zai.assert_not_called()
+        assert "Z.AI" in captured.out
+        assert "Claude" not in captured.out
+        assert "cached" in captured.out  # staleness note in header
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai', '--cached'])
+    def test_missing_provider_triggers_fetch(self, mock_zai, capsys):
+        import cclimits
+        cclimits.write_cache({"claude": {"status": "ok", "five_hour": {"used": "45.5%"}}})
+        mock_zai.return_value = {"status": "ok", "token_quota": {"percentage": 30.0}}
+        main()
+        mock_zai.assert_called_once()

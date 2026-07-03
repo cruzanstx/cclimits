@@ -68,31 +68,39 @@ def get_cache_path() -> Path:
         pass  # Silently fail if we can't create directory
     return CACHE_FILE
 
-def read_cache(ttl: int) -> dict | None:
-    """Read cache if fresh (younger than TTL seconds), return None if stale/missing"""
+def read_cache(ttl: int) -> tuple[dict, int] | None:
+    """Read cache if fresh (younger than TTL seconds), return (data, age_seconds) or None"""
     try:
         cache_file = get_cache_path()
         if not cache_file.exists():
             return None
-        
+
         with open(cache_file, 'r') as f:
             cache_data = json.load(f)
-        
+
         # Check cache structure
         if not isinstance(cache_data, dict) or "timestamp" not in cache_data or "data" not in cache_data:
             return None
-        
+
         # Check if cache is fresh
         import time
         cache_age = time.time() - cache_data["timestamp"]
         if cache_age < ttl:
-            return cache_data["data"]
-        
+            return cache_data["data"], int(cache_age)
+
         return None
     except (json.JSONDecodeError, KeyError, TypeError, OSError, PermissionError):
         return None
 
 NO_CREDS_ERROR = "No credentials found"
+
+def format_cache_age(seconds: int) -> str:
+    """Format cache age compactly: 42s, 3m, 2h"""
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    return f"{seconds // 3600}h"
 
 def merge_cache_data(old: dict, new: dict) -> dict:
     """Merge new results over previous cache, keeping earlier good entries
@@ -860,22 +868,21 @@ def get_zai_usage() -> dict:
     status, data = http_get("https://api.z.ai/api/monitor/usage/quota/limit", headers)
     if status == 200 and isinstance(data, dict) and data.get("success"):
         result["status"] = "ok"
+        if plan := data.get("data", {}).get("level"):
+            result["plan"] = plan
         limits = data.get("data", {}).get("limits", [])
 
         for limit in limits:
             limit_type = limit.get("type")
             if limit_type == "TOKENS_LIMIT":
-                total = limit.get("usage", 0)
-                used = limit.get("currentValue", 0)
-                remaining = limit.get("remaining", 0)
-                pct = limit.get("percentage", 0)
-
+                # The API often returns only percentage + nextResetTime here;
+                # raw token counts appear only when the API provides them
                 result["token_quota"] = {
-                    "limit": total,
-                    "used": used,
-                    "remaining": remaining,
-                    "percentage": pct,
+                    "percentage": limit.get("percentage", 0),
                 }
+                for src, dst in (("usage", "limit"), ("currentValue", "used"), ("remaining", "remaining")):
+                    if src in limit:
+                        result["token_quota"][dst] = limit[src]
 
                 # Parse reset time
                 if reset_ts := limit.get("nextResetTime"):
@@ -926,6 +933,8 @@ def get_zai_usage() -> dict:
         status, data = http_get("https://chat.z.ai/api/v1/auths/", auth_headers)
         if status == 200:
             result["status"] = "authenticated"
+        else:
+            result["error"] = "Could not fetch usage"
 
     # Add hints
     result["hint"] = "Dashboard: https://z.ai/manage-apikey/billing"
@@ -1450,8 +1459,8 @@ def print_section(name: str, data: dict):
         print(f"    Remaining: {remaining_pct}%")
         if "resets_in" in tq:
             print(f"    Resets in: {tq['resets_in']}")
-        # Show actual numbers
-        if tq.get("limit"):
+        # Show actual numbers (only when the API provided them)
+        if tq.get("limit") and "used" in tq:
             print(f"    ({tq['used']:,} / {tq['limit']:,} tokens)")
 
     if "request_quota" in data:
@@ -1575,7 +1584,7 @@ def get_status_icon(pct: float) -> str:
         return "✅"
 
 
-def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
+def print_oneline(results: dict, window: str = "5h", use_color: bool = False, cache_age: int | None = None):
     """Print compact one-liner output"""
     if window not in ("5h", "7d", "both"):
         window = "5h"
@@ -1793,7 +1802,10 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False):
         elif "error" in data:
             parts.append(f"Antigravity: {fail_icon(data)}")
 
-    print(" | ".join(parts))
+    line = " | ".join(parts)
+    if cache_age is not None:
+        line += f" (cached {format_cache_age(cache_age)})"
+    print(line)
 
 
 def main():
@@ -1863,15 +1875,25 @@ Example Output:
     use_cache = args.cached or args.cache_ttl is not None
     cache_ttl = args.cache_ttl if args.cache_ttl is not None else DEFAULT_CACHE_TTL
 
+    # Which providers were explicitly requested (empty = check all)
+    requested = [name for name in
+                 ("claude", "codex", "gemini", "zai", "openrouter", "kimi", "antigravity", "synthetic")
+                 if getattr(args, name)]
+    check_all = not requested
+
     # Try to read from cache if caching is enabled
     results = None
+    cache_age = None
     if use_cache:
-        cached_results = read_cache(cache_ttl)
-        if cached_results is not None:
-            results = cached_results
-
-    # If no specific tool selected, check all
-    check_all = not (args.claude or args.codex or args.gemini or args.zai or args.openrouter or args.kimi or args.antigravity or args.synthetic)
+        cached = read_cache(cache_ttl)
+        if cached is not None:
+            cached_data, age = cached
+            if check_all:
+                results, cache_age = cached_data, age
+            elif all(name in cached_data for name in requested):
+                # Honor provider filters on cache hits; refetch if any requested provider is missing
+                results = {name: cached_data[name] for name in requested}
+                cache_age = age
 
     skip_fetch = results is not None
     if not skip_fetch:
@@ -1902,10 +1924,11 @@ Example Output:
         print(json.dumps(results, indent=2))
     elif args.oneline:
         window = args.oneline if args.oneline in ("5h", "7d", "both") else "5h"
-        print_oneline(results, window, use_color=args.noemoji)
+        print_oneline(results, window, use_color=args.noemoji, cache_age=cache_age)
     else:
         print("\n🔍 AI CLI Usage Checker")
-        print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        cached_note = f"  (cached {format_cache_age(cache_age)} ago)" if cache_age is not None else ""
+        print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{cached_note}")
 
         if "claude" in results:
             print_section("Claude Code", results["claude"])

@@ -562,3 +562,19 @@ class TestOnelineMissingCredentials:
         captured = capsys.readouterr()
         assert "no key" in captured.out
         assert "ERR" not in captured.out
+
+
+class TestOnelineCacheAge:
+    """Cached oneline output is labeled with its age."""
+
+    def test_cache_age_suffix(self, capsys):
+        results = {"zai": {"status": "ok", "token_quota": {"percentage": 30.0}}}
+        print_oneline(results, "5h", cache_age=42)
+        captured = capsys.readouterr()
+        assert captured.out.rstrip().endswith("(cached 42s)")
+
+    def test_no_suffix_when_live(self, capsys):
+        results = {"zai": {"status": "ok", "token_quota": {"percentage": 30.0}}}
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+        assert "cached" not in captured.out

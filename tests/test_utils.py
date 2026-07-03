@@ -168,3 +168,38 @@ class TestMergeCacheData:
         from cclimits import merge_cache_data
         assert merge_cache_data({}, {"zai": {"status": "ok"}}) == {"zai": {"status": "ok"}}
         assert merge_cache_data(None, {"zai": {"status": "ok"}}) == {"zai": {"status": "ok"}}
+
+
+class TestFormatCacheAge:
+    """Tests for format_cache_age()."""
+
+    def test_seconds(self):
+        from cclimits import format_cache_age
+        assert format_cache_age(42) == "42s"
+
+    def test_minutes(self):
+        from cclimits import format_cache_age
+        assert format_cache_age(185) == "3m"
+
+    def test_hours(self):
+        from cclimits import format_cache_age
+        assert format_cache_age(7300) == "2h"
+
+
+class TestReadCacheReturnsAge:
+    """read_cache() returns (data, age_seconds) for fresh caches."""
+
+    def test_fresh_cache_roundtrip(self):
+        from cclimits import read_cache, write_cache
+        assert write_cache({"zai": {"status": "ok"}})
+        cached = read_cache(60)
+        assert cached is not None
+        data, age = cached
+        assert data["zai"]["status"] == "ok"
+        assert isinstance(age, int) and 0 <= age < 60
+
+    def test_stale_cache_returns_none(self):
+        import json, time
+        from cclimits import read_cache, get_cache_path
+        get_cache_path().write_text(json.dumps({"timestamp": time.time() - 120, "data": {}}))
+        assert read_cache(60) is None

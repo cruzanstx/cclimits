@@ -1,5 +1,15 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-02: Cache Filter/Staleness + Z.AI Data Fixes
+
+- Provider filters now honored on cache hits: `--zai --cached` used to print every cached provider; now subsets to the requested ones, and refetches if any requested provider is missing from cache
+- Cached output is labeled with its age: oneline gets a `(cached 42s)` suffix, detailed header gets `(cached 42s ago)` — via `read_cache()` now returning `(data, age_seconds)` and new `format_cache_age()`
+- Z.AI `token_quota` no longer emits fake `limit/used/remaining: 0` — the `/quota/limit` TOKENS_LIMIT entry only carries `percentage` + `nextResetTime` (verified against raw API); counts included only when the API provides them. Also captures plan `level` (e.g. "max") into `plan`, rendered by the generic 📊 Plan line
+- Z.AI total fetch failure (both endpoints + auth fallback down) now returns `error: "Could not fetch usage"` instead of a dict with neither status nor error (which oneline silently dropped)
+- Tests: 147 passing (11 new across test_cli/test_usage/test_utils/test_output)
+
+**Files:** `lib/cclimits.py`, `tests/test_cli.py`, `tests/test_usage.py`, `tests/test_utils.py`, `tests/test_output.py`, `memory-bank/deltas.md`
+
 ## 2026-07-02: Cache Merge + Missing-Credentials Icon
 
 - `write_cache()` now merges into the existing cache via new `merge_cache_data()`: a provider entry with `error: "No credentials found"` no longer overwrites a previous good entry, and partial runs (e.g. `--zai`) no longer clobber other providers' cached data
