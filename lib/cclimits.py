@@ -130,8 +130,12 @@ def write_cache(data: dict) -> bool:
             "timestamp": time.time(),
             "data": merge_cache_data(old_data, data)
         }
-        with open(cache_file, 'w') as f:
+        # Atomic write: concurrent runs (cron/statusline vs interactive) must
+        # never see a half-written cache file
+        tmp_file = cache_file.with_suffix(".json.tmp")
+        with open(tmp_file, 'w') as f:
             json.dump(cache_data, f, indent=2)
+        os.replace(tmp_file, cache_file)
         return True
     except (OSError, PermissionError, TypeError):
         return False
@@ -1662,11 +1666,22 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
         data = results["zai"]
         if data.get("status") == "ok" and "token_quota" in data:
             pct = data["token_quota"].get("percentage", 0)
-            pct_str = f"{pct}% (5h)"
-            if use_color:
-                parts.append(f"Z.AI: {colorize_pct(pct_str, pct)}")
+            rq = data.get("request_quota", {})
+            if window == "both" and rq.get("limit"):
+                # Second value: request quota (tokens% / requests%)
+                req_pct = round(rq.get("used", 0) / rq["limit"] * 100)
+                max_pct = max(float(pct), float(req_pct))
+                pct_display = f"{pct}%/{req_pct}%"
+                if use_color:
+                    parts.append(f"Z.AI: {colorize_pct(pct_display, max_pct)}")
+                else:
+                    parts.append(f"Z.AI: {pct_display} {get_status_icon(max_pct)}")
             else:
-                parts.append(f"Z.AI: {pct_str} {get_status_icon(pct)}")
+                pct_str = f"{pct}% (5h)"
+                if use_color:
+                    parts.append(f"Z.AI: {colorize_pct(pct_str, pct)}")
+                else:
+                    parts.append(f"Z.AI: {pct_str} {get_status_icon(pct)}")
         elif "error" in data:
             parts.append(f"Z.AI: {fail_icon(data)}")
 

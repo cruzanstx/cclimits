@@ -578,3 +578,33 @@ class TestOnelineCacheAge:
         print_oneline(results, "5h")
         captured = capsys.readouterr()
         assert "cached" not in captured.out
+
+
+class TestZaiOnelineBoth:
+    """In 'both' mode Z.AI shows tokens%/requests% like other dual-window providers."""
+
+    def test_both_shows_request_quota(self, capsys):
+        results = {"zai": {
+            "status": "ok",
+            "token_quota": {"percentage": 1},
+            "request_quota": {"limit": 4000, "used": 1000, "remaining": 3000},
+        }}
+        print_oneline(results, "both")
+        captured = capsys.readouterr()
+        assert "Z.AI: 1%/25%" in captured.out
+
+    def test_both_without_request_quota_falls_back(self, capsys):
+        results = {"zai": {"status": "ok", "token_quota": {"percentage": 30.0}}}
+        print_oneline(results, "both")
+        captured = capsys.readouterr()
+        assert "Z.AI: 30.0% (5h)" in captured.out
+
+    def test_5h_window_unchanged(self, capsys):
+        results = {"zai": {
+            "status": "ok",
+            "token_quota": {"percentage": 30.0},
+            "request_quota": {"limit": 4000, "used": 1000},
+        }}
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+        assert "Z.AI: 30.0% (5h)" in captured.out

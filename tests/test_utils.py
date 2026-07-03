@@ -203,3 +203,14 @@ class TestReadCacheReturnsAge:
         from cclimits import read_cache, get_cache_path
         get_cache_path().write_text(json.dumps({"timestamp": time.time() - 120, "data": {}}))
         assert read_cache(60) is None
+
+
+class TestAtomicCacheWrite:
+    """write_cache must not leave a partial file or a stray temp file."""
+
+    def test_no_tmp_file_left_behind(self):
+        from cclimits import write_cache, get_cache_path
+        assert write_cache({"zai": {"status": "ok"}})
+        cache_file = get_cache_path()
+        assert cache_file.exists()
+        assert not cache_file.with_suffix(".json.tmp").exists()

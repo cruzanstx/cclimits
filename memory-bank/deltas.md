@@ -1,5 +1,13 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-02: Atomic Cache Writes + Z.AI Dual Value in Both Mode
+
+- `write_cache()` writes to a `.json.tmp` sibling then `os.replace()` — concurrent runs (cron/statusline vs interactive) can no longer observe a half-written cache
+- `--oneline both` now shows Z.AI as `tokens%/requests%` (e.g. `Z.AI: 1%/0%`), matching the dual-value style of Claude/Codex/Synthetic; falls back to `N% (5h)` when request quota is absent; `5h`/`7d` windows unchanged
+- Tests: 151 passing (4 new)
+
+**Files:** `lib/cclimits.py`, `tests/test_output.py`, `tests/test_utils.py`, `memory-bank/deltas.md`
+
 ## 2026-07-02: Cache Filter/Staleness + Z.AI Data Fixes
 
 - Provider filters now honored on cache hits: `--zai --cached` used to print every cached provider; now subsets to the requested ones, and refetches if any requested provider is missing from cache
