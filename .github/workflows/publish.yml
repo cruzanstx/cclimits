@@ -37,6 +37,10 @@ jobs:
             exit 1
           fi
           echo "Tag $TAG matches package.json version v$PKG_VERSION"
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Trusted Publishing (OIDC): no NPM_TOKEN secret. Requires npm >= 11.5.1
+      # and a Trusted Publisher configured on npmjs.com for this package
+      # (GitHub Actions, repo cruzanstx/cclimits, workflow publish.yml).
+      # Provenance is generated automatically with OIDC.
+      - name: Update npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+      - run: npm publish --access public

@@ -91,9 +91,9 @@ There are two paths:
 2. Update `memory-bank/deltas.md` and `progress.md`
 3. Bump version: `npm version patch` (creates the tag)
 4. Push the tag: `git push --tags`
-5. The `publish.yml` workflow runs the test suite, verifies the tag matches `package.json`, then runs `npm publish --provenance --access public` using the `NPM_TOKEN` repo secret
+5. The `publish.yml` workflow runs the test suite, verifies the tag matches `package.json`, then runs `npm publish --access public` via npm Trusted Publishing (OIDC — no token secret; provenance is automatic)
 
-**Prerequisite**: A granular automation token named `NPM_TOKEN` must exist in the repo's GitHub Actions secrets.
+**Prerequisite**: A Trusted Publisher must be configured on npmjs.com for the `cclimits` package (package Settings → Trusted Publisher → GitHub Actions: owner `cruzanstx`, repo `cclimits`, workflow `publish.yml`). No npm token or GitHub secret is needed.
 
 ### Manual (fallback)
 

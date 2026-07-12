@@ -36,7 +36,7 @@
 ## 2026-07-12: GitHub Actions CI + Automated npm Publishing
 
 - Added `.github/workflows/ci.yml`: runs the 163-test pytest suite on push to main and pull requests across a Python 3.9/3.11/3.13 matrix with two HTTP-backend flavors — one with `requests` installed (full suite), one without (urllib fallback; `-k "not WithRequests"` skips the 9 tests that mock the requests library). Also runs a `node bin/cclimits.js --help` wrapper smoke test.
-- Added `.github/workflows/publish.yml`: triggered by `v*` tags — runs the test suite, verifies the tag version matches `package.json`, then publishes to npm with `--provenance --access public` using the `NPM_TOKEN` secret. Requires `id-token: write` permission for provenance.
+- Added `.github/workflows/publish.yml`: triggered by `v*` tags — runs the test suite, verifies the tag version matches `package.json`, then publishes to npm with `--access public` via Trusted Publishing (OIDC — npm's recommended CI/CD auth; no token secret, provenance automatic). Requires `id-token: write` permission and a Trusted Publisher configured on npmjs.com for the package.
 - Added `requirements-dev.txt` (pytest, requests) for dev dependency tracking.
 - Added CI status badge to `README.md`.
 - Updated `CLAUDE.md` Publishing Workflow section to document both automated (tag-push) and manual paths.

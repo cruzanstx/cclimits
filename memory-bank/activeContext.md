@@ -18,7 +18,7 @@
 
 1. Implement Replit support (High feasibility endpoint identified)
 2. Monitor GitHub Copilot/Cursor for future public API availability
-3. ~~Add CI/CD for automated npm publishing~~ ✅ Done (2026-07-12) — `.github/workflows/ci.yml` runs tests on push/PR; `.github/workflows/publish.yml` publishes on `v*` tags via `NPM_TOKEN` secret
+3. ~~Add CI/CD for automated npm publishing~~ ✅ Done (2026-07-12) — `.github/workflows/ci.yml` runs tests on push/PR; `.github/workflows/publish.yml` publishes on `v*` tags via npm Trusted Publishing (OIDC, no token)
 4. Possible future: Gemini legacy OAuth auto-refresh (CLI retired 2026-06-18; expired token now visible as ⏰ in oneline)
 
 ## Key Patterns
