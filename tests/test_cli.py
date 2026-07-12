@@ -662,3 +662,139 @@ class TestParallelFetch:
         assert elapsed < 0.55, (
             f"Expected concurrent execution (<0.55s), took {elapsed:.2f}s"
         )
+
+
+class TestStaleCacheFallback:
+    """When a live fetch hits a transient error but the cache holds a previous
+    good entry, serve the stale entry (labeled with its age) instead of ❌."""
+
+    def _write_cache_with_age(self, data, age_seconds):
+        """Write a cache file with a timestamp *age_seconds* in the past."""
+        import json, time
+        from cclimits import get_cache_path
+        get_cache_path().write_text(json.dumps({
+            "timestamp": time.time() - age_seconds,
+            "data": data,
+        }))
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai', '--oneline'])
+    def test_transient_error_serves_stale(self, mock_zai, capsys):
+        """Transient API error + fresh-enough good cache → stale entry with marker."""
+        mock_zai.return_value = {"error": "API error (500)"}
+        self._write_cache_with_age(
+            {"zai": {"status": "ok", "token_quota": {"percentage": 1}}}, 1800
+        )
+        main()
+        captured = capsys.readouterr()
+        assert "Z.AI: 1% (5h)" in captured.out
+        assert "(stale 30m)" in captured.out
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai', '--json'])
+    def test_json_output_contains_stale_annotation(self, mock_zai, capsys):
+        """JSON output carries stale_fallback and stale_age_seconds."""
+        mock_zai.return_value = {"error": "API error (500)"}
+        self._write_cache_with_age(
+            {"zai": {"status": "ok", "token_quota": {"percentage": 42}}}, 600
+        )
+        main()
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+        assert result["zai"]["stale_fallback"] is True
+        assert isinstance(result["zai"]["stale_age_seconds"], int)
+        assert result["zai"]["status"] == "ok"
+        assert result["zai"]["token_quota"]["percentage"] == 42
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai', '--oneline'])
+    def test_no_creds_not_replaced(self, mock_zai, capsys):
+        """No-credentials error is NOT replaced by stale data."""
+        mock_zai.return_value = {"error": "No credentials found"}
+        self._write_cache_with_age(
+            {"zai": {"status": "ok", "token_quota": {"percentage": 1}}}, 60
+        )
+        main()
+        captured = capsys.readouterr()
+        assert "Z.AI: 🔑" in captured.out
+        assert "stale" not in captured.out
+
+    @patch('cclimits.get_claude_usage')
+    @patch('sys.argv', ['cclimits', '--claude', '--oneline'])
+    def test_expired_token_not_replaced(self, mock_claude, capsys):
+        """Expired-token error is NOT replaced by stale data."""
+        mock_claude.return_value = {"error": "Token expired"}
+        self._write_cache_with_age(
+            {"claude": {"status": "ok", "five_hour": {"used": "10%"}}}, 60
+        )
+        main()
+        captured = capsys.readouterr()
+        assert "Claude: ⏰" in captured.out
+        assert "stale" not in captured.out
+
+    @patch('cclimits.get_openrouter_usage')
+    @patch('sys.argv', ['cclimits', '--openrouter', '--oneline'])
+    def test_401_not_replaced(self, mock_or, capsys):
+        """401/invalid-key error is NOT replaced by stale data."""
+        mock_or.return_value = {"error": "Invalid API key"}
+        self._write_cache_with_age(
+            {"openrouter": {"status": "ok", "balance_usd": 10.0}}, 60
+        )
+        main()
+        captured = capsys.readouterr()
+        # Invalid API key is a non-transient error, shows ❌
+        assert "stale" not in captured.out
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai', '--oneline'])
+    def test_cache_older_than_cap_not_replaced(self, mock_zai, capsys):
+        """Cached entry older than STALE_CACHE_MAX_AGE → error shown, no substitution."""
+        from cclimits import STALE_CACHE_MAX_AGE
+        mock_zai.return_value = {"error": "API error (500)"}
+        self._write_cache_with_age(
+            {"zai": {"status": "ok", "token_quota": {"percentage": 1}}},
+            STALE_CACHE_MAX_AGE + 100,
+        )
+        main()
+        captured = capsys.readouterr()
+        assert "Z.AI: ❌" in captured.out
+        assert "stale" not in captured.out
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai', '--oneline', '--no-stale-fallback'])
+    def test_no_stale_fallback_flag_disables(self, mock_zai, capsys):
+        """--no-stale-fallback flag disables the stale substitution."""
+        mock_zai.return_value = {"error": "API error (500)"}
+        self._write_cache_with_age(
+            {"zai": {"status": "ok", "token_quota": {"percentage": 1}}}, 60
+        )
+        main()
+        captured = capsys.readouterr()
+        assert "Z.AI: ❌" in captured.out
+        assert "stale" not in captured.out
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai', '--oneline', '--cached'])
+    def test_cached_mode_ttl_miss_with_transient_error(self, mock_zai, capsys):
+        """--cached run whose TTL missed, followed by a failed fetch, serves stale."""
+        mock_zai.return_value = {"error": "Could not fetch usage"}
+        self._write_cache_with_age(
+            {"zai": {"status": "ok", "token_quota": {"percentage": 7}}}, 120
+        )
+        main()
+        captured = capsys.readouterr()
+        assert "Z.AI: 7% (5h)" in captured.out
+        assert "(stale 2m)" in captured.out
+
+    @patch('cclimits.get_zai_usage')
+    @patch('sys.argv', ['cclimits', '--zai'])
+    def test_detailed_output_shows_stale_line(self, mock_zai, capsys):
+        """Detailed output shows a stale-fallback notice line."""
+        mock_zai.return_value = {"error": "API error (500)"}
+        self._write_cache_with_age(
+            {"zai": {"status": "ok", "token_quota": {"percentage": 15}}}, 1800
+        )
+        main()
+        captured = capsys.readouterr()
+        assert "Stale fallback" in captured.out
+        assert "30m" in captured.out

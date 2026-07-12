@@ -139,6 +139,21 @@ class TestMergeCacheData:
     def test_real_error_overwrites_previous_entry(self):
         from cclimits import merge_cache_data
         old = {"zai": {"status": "ok"}}
+        new = {"zai": {"error": "Invalid API key", "hint": "Check key"}}
+        merged = merge_cache_data(old, new)
+        assert merged["zai"]["error"] == "Invalid API key"
+
+    def test_transient_error_preserves_previous_good_entry(self):
+        from cclimits import merge_cache_data
+        old = {"zai": {"status": "ok", "token_quota": {"percentage": 1}}}
+        new = {"zai": {"error": "API error (500)"}}
+        merged = merge_cache_data(old, new)
+        assert merged["zai"]["status"] == "ok"
+        assert merged["zai"]["token_quota"]["percentage"] == 1
+
+    def test_transient_error_overwrites_previous_error_entry(self):
+        from cclimits import merge_cache_data
+        old = {"zai": {"error": "API error (503)"}}
         new = {"zai": {"error": "API error (500)"}}
         merged = merge_cache_data(old, new)
         assert merged["zai"]["error"] == "API error (500)"
@@ -214,3 +229,185 @@ class TestAtomicCacheWrite:
         cache_file = get_cache_path()
         assert cache_file.exists()
         assert not cache_file.with_suffix(".json.tmp").exists()
+
+
+class TestIsTransientError:
+    """_is_transient_error classifies which failures qualify for stale fallback."""
+
+    def test_no_creds_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error({"error": "No credentials found"})
+
+    def test_token_expired_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error({"error": "Token expired"})
+        assert not _is_transient_error({"token_status": "expired", "error": "some error"})
+
+    def test_invalid_api_key_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error({"error": "Invalid API key"})
+
+    def test_forbidden_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error({"error": "Forbidden"})
+
+    def test_authentication_failed_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error({"error": "Authentication failed"})
+
+    def test_401_in_error_string_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error({"error": "API error (HTTP 401)"})
+
+    def test_403_in_error_string_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error({"error": "API error (HTTP 403)"})
+
+    def test_500_is_transient(self):
+        from cclimits import _is_transient_error
+        assert _is_transient_error({"error": "API error (500)"})
+
+    def test_connection_error_is_transient(self):
+        from cclimits import _is_transient_error
+        assert _is_transient_error({"error": "API error (0)"})
+        assert _is_transient_error({"error": "HTTP 0"})
+
+    def test_could_not_fetch_is_transient(self):
+        from cclimits import _is_transient_error
+        assert _is_transient_error({"error": "Could not fetch usage"})
+
+    def test_generic_api_error_is_transient(self):
+        from cclimits import _is_transient_error
+        assert _is_transient_error({"error": "API error"})
+
+    def test_no_error_key_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error({"status": "ok"})
+        assert not _is_transient_error({})
+
+    def test_non_dict_not_transient(self):
+        from cclimits import _is_transient_error
+        assert not _is_transient_error(None)
+        assert not _is_transient_error("error")
+
+
+class TestApplyStaleFallback:
+    """apply_stale_fallback replaces transient errors with stale good entries."""
+
+    def test_transient_error_replaced_with_stale_good_entry(self):
+        from cclimits import apply_stale_fallback
+        results = {"zai": {"error": "API error (500)"}}
+        cached = {"zai": {"status": "ok", "token_quota": {"percentage": 30}}}
+        updated = apply_stale_fallback(results, cached, cached_age=120)
+        assert updated["zai"]["status"] == "ok"
+        assert updated["zai"]["stale_fallback"] is True
+        assert updated["zai"]["stale_age_seconds"] == 120
+
+    def test_no_creds_not_replaced(self):
+        from cclimits import apply_stale_fallback
+        results = {"zai": {"error": "No credentials found"}}
+        cached = {"zai": {"status": "ok", "token_quota": {"percentage": 30}}}
+        updated = apply_stale_fallback(results, cached, cached_age=60)
+        assert updated["zai"]["error"] == "No credentials found"
+        assert "stale_fallback" not in updated["zai"]
+
+    def test_expired_token_not_replaced(self):
+        from cclimits import apply_stale_fallback
+        results = {"codex": {"token_status": "expired"}}
+        cached = {"codex": {"status": "ok", "primary_window": {"used": "10%"}}}
+        updated = apply_stale_fallback(results, cached, cached_age=60)
+        assert updated["codex"]["token_status"] == "expired"
+        assert "stale_fallback" not in updated["codex"]
+
+    def test_401_not_replaced(self):
+        from cclimits import apply_stale_fallback
+        results = {"openrouter": {"error": "Invalid API key"}}
+        cached = {"openrouter": {"status": "ok", "balance_usd": 10.0}}
+        updated = apply_stale_fallback(results, cached, cached_age=60)
+        assert updated["openrouter"]["error"] == "Invalid API key"
+        assert "stale_fallback" not in updated["openrouter"]
+
+    def test_no_cached_entry_not_replaced(self):
+        from cclimits import apply_stale_fallback
+        results = {"zai": {"error": "API error (500)"}}
+        cached = {"claude": {"status": "ok"}}
+        updated = apply_stale_fallback(results, cached, cached_age=60)
+        assert updated["zai"]["error"] == "API error (500)"
+
+    def test_cached_entry_not_good_not_replaced(self):
+        from cclimits import apply_stale_fallback
+        results = {"zai": {"error": "API error (500)"}}
+        cached = {"zai": {"error": "Could not fetch usage"}}
+        updated = apply_stale_fallback(results, cached, cached_age=60)
+        assert updated["zai"]["error"] == "API error (500)"
+
+    def test_older_than_cap_not_replaced(self):
+        from cclimits import apply_stale_fallback, STALE_CACHE_MAX_AGE
+        results = {"zai": {"error": "API error (500)"}}
+        cached = {"zai": {"status": "ok", "token_quota": {"percentage": 30}}}
+        updated = apply_stale_fallback(results, cached, cached_age=STALE_CACHE_MAX_AGE)
+        assert updated["zai"]["error"] == "API error (500)"
+
+    def test_successful_entry_not_replaced(self):
+        from cclimits import apply_stale_fallback
+        results = {"zai": {"status": "ok", "token_quota": {"percentage": 50}}}
+        cached = {"zai": {"status": "ok", "token_quota": {"percentage": 30}}}
+        updated = apply_stale_fallback(results, cached, cached_age=60)
+        assert updated["zai"]["token_quota"]["percentage"] == 50
+        assert "stale_fallback" not in updated["zai"]
+
+    def test_mixed_results_only_transients_replaced(self):
+        from cclimits import apply_stale_fallback
+        results = {
+            "zai": {"error": "API error (500)"},
+            "claude": {"error": "No credentials found"},
+            "codex": {"status": "ok", "primary_window": {"used": "10%"}},
+        }
+        cached = {
+            "zai": {"status": "ok", "token_quota": {"percentage": 30}},
+            "claude": {"status": "ok", "five_hour": {"used": "45%"}},
+            "codex": {"status": "ok", "primary_window": {"used": "99%"}},
+        }
+        updated = apply_stale_fallback(results, cached, cached_age=300)
+        assert updated["zai"]["stale_fallback"] is True
+        assert updated["zai"]["stale_age_seconds"] == 300
+        assert updated["claude"]["error"] == "No credentials found"
+        assert updated["codex"]["primary_window"]["used"] == "10%"
+
+
+class TestReadCacheMaxAge:
+    """read_cache(ttl, max_age=...) reads stale cache bounded by max_age."""
+
+    def test_stale_within_max_age_returned(self):
+        import json, time
+        from cclimits import read_cache, get_cache_path
+        get_cache_path().write_text(json.dumps({
+            "timestamp": time.time() - 120,
+            "data": {"zai": {"status": "ok"}},
+        }))
+        # ttl=60 would normally miss, but max_age=300 allows it
+        cached = read_cache(60, max_age=300)
+        assert cached is not None
+        data, age = cached
+        assert data["zai"]["status"] == "ok"
+        assert 100 <= age <= 130
+
+    def test_stale_beyond_max_age_returns_none(self):
+        import json, time
+        from cclimits import read_cache, get_cache_path
+        get_cache_path().write_text(json.dumps({
+            "timestamp": time.time() - 600,
+            "data": {"zai": {"status": "ok"}},
+        }))
+        assert read_cache(60, max_age=300) is None
+
+    def test_max_age_none_uses_ttl(self):
+        import json, time
+        from cclimits import read_cache, get_cache_path
+        get_cache_path().write_text(json.dumps({
+            "timestamp": time.time() - 120,
+            "data": {"zai": {"status": "ok"}},
+        }))
+        # max_age=None: ttl=60 is the bound, 120 > 60 -> None
+        assert read_cache(60) is None
+        assert read_cache(60, max_age=None) is None

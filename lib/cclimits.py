@@ -61,6 +61,7 @@ COLORS = {
 CACHE_DIR = Path.home() / ".cache" / "cclimits"
 CACHE_FILE = CACHE_DIR / "usage.json"
 DEFAULT_CACHE_TTL = 60  # seconds
+STALE_CACHE_MAX_AGE = 24 * 60 * 60  # 24h — don't serve stale fallback data older than this
 
 def get_cache_path() -> Path:
     """Get cache file path, creating directory if needed"""
@@ -70,8 +71,14 @@ def get_cache_path() -> Path:
         pass  # Silently fail if we can't create directory
     return CACHE_FILE
 
-def read_cache(ttl: int) -> tuple[dict, int] | None:
-    """Read cache if fresh (younger than TTL seconds), return (data, age_seconds) or None"""
+def read_cache(ttl: int, max_age: int | None = None) -> tuple[dict, int] | None:
+    """Read cache if fresh, return (data, age_seconds) or None.
+
+    Normally freshness is bounded by *ttl*.  When *max_age* is given the ttl
+    is ignored and entries up to *max_age* seconds old are returned — used by
+    the stale-cache fallback to serve the last good reading when a live
+    fetch hits a transient error.
+    """
     try:
         cache_file = get_cache_path()
         if not cache_file.exists():
@@ -87,7 +94,8 @@ def read_cache(ttl: int) -> tuple[dict, int] | None:
         # Check if cache is fresh
         import time
         cache_age = time.time() - cache_data["timestamp"]
-        if cache_age < ttl:
+        bound = max_age if max_age is not None else ttl
+        if cache_age < bound:
             return cache_data["data"], int(cache_age)
 
         return None
@@ -95,6 +103,43 @@ def read_cache(ttl: int) -> tuple[dict, int] | None:
         return None
 
 NO_CREDS_ERROR = "No credentials found"
+
+# Error strings that signal a config/auth problem the user must fix, not a
+# transient outage.  These are excluded from stale-cache fallback.
+_NON_TRANSIENT_ERRORS = frozenset({
+    NO_CREDS_ERROR,
+    "Token expired",
+    "Invalid API key",
+    "Forbidden",
+    "Authentication failed",
+})
+
+
+def _is_transient_error(data: object) -> bool:
+    """True if *data* is a transient fetch error (network blip, HTTP 5xx,
+    generic ``API error`` / ``Could not fetch usage``) suitable for
+    stale-cache fallback.  Config issues the user must fix — missing
+    credentials, expired tokens, 401/invalid-key, 403/forbidden — are NOT
+    transient.
+    """
+    if not isinstance(data, dict) or "error" not in data:
+        return False
+    if data.get("token_status") == "expired":
+        return False
+    err = data.get("error")
+    if not isinstance(err, str):
+        return False
+    if err in _NON_TRANSIENT_ERRORS:
+        return False
+    if "401" in err or "403" in err:
+        return False
+    return True
+
+
+def _is_good_cache_entry(data: object) -> bool:
+    """A cached entry is 'good' if it carries a successful status."""
+    return isinstance(data, dict) and data.get("status") in ("ok", "authenticated")
+
 
 def format_cache_age(seconds: int) -> str:
     """Format cache age compactly: 42s, 3m, 2h"""
@@ -106,14 +151,17 @@ def format_cache_age(seconds: int) -> str:
 
 def merge_cache_data(old: dict, new: dict) -> dict:
     """Merge new results over previous cache, keeping earlier good entries
-    for providers this run couldn't check (missing credentials in this
-    environment shouldn't erase data cached from an environment that has them)."""
+    for providers this run couldn't check or hit a transient error on
+    (missing credentials in this environment shouldn't erase data cached
+    from an environment that has them; a network blip shouldn't either)."""
     merged = dict(old) if isinstance(old, dict) else {}
     for key, value in new.items():
         prev = merged.get(key)
-        if (isinstance(value, dict) and value.get("error") == NO_CREDS_ERROR
-                and isinstance(prev, dict) and prev.get("error") != NO_CREDS_ERROR):
-            continue
+        if isinstance(value, dict) and isinstance(prev, dict):
+            if value.get("error") == NO_CREDS_ERROR and prev.get("error") != NO_CREDS_ERROR:
+                continue
+            if _is_transient_error(value) and _is_good_cache_entry(prev):
+                continue
         merged[key] = value
     return merged
 
@@ -141,6 +189,30 @@ def write_cache(data: dict) -> bool:
         return True
     except (OSError, PermissionError, TypeError):
         return False
+
+
+def apply_stale_fallback(results: dict, cached_data: dict, cached_age: int,
+                         max_age: int = STALE_CACHE_MAX_AGE) -> dict:
+    """Replace transient-error entries with stale-but-good cached entries.
+
+    A substituted entry is annotated with ``stale_age_seconds`` and
+    ``stale_fallback = True`` so output renderers can label it.  Entries
+    whose cached age meets or exceeds *max_age*, or whose live error is
+    non-transient (no creds, expired token, 401/invalid key), are left
+    unchanged.
+    """
+    if cached_age >= max_age:
+        return results
+    updated = dict(results)
+    for key, data in results.items():
+        if _is_transient_error(data):
+            cached_entry = cached_data.get(key)
+            if isinstance(cached_entry, dict) and _is_good_cache_entry(cached_entry):
+                stale = dict(cached_entry)
+                stale["stale_age_seconds"] = cached_age
+                stale["stale_fallback"] = True
+                updated[key] = stale
+    return updated
 
 
 ### OpenRouter Functions
@@ -1339,6 +1411,11 @@ def print_section(name: str, data: dict):
     elif data.get("status") == "authenticated":
         print("  ✅ Authenticated")
 
+    # Stale-cache fallback notice
+    if "stale_fallback" in data:
+        age = data.get("stale_age_seconds", 0)
+        print(f"  💤 Stale fallback (last good: {format_cache_age(age)} ago)")
+
     # Claude-specific usage data
     if "five_hour" in data:
         fh = data["five_hour"]
@@ -1759,6 +1836,12 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
         data = results[key]
         rendered = p["render_oneline"](data, window, use_color)
         if rendered is not None:
+            if "stale_fallback" in data:
+                age = data.get("stale_age_seconds", 0)
+                tag = f"(stale {format_cache_age(age)})"
+                if use_color:
+                    tag = f"{COLORS['yellow']}{tag}{COLORS['reset']}"
+                rendered = f"{rendered} {tag}"
             parts.append(rendered)
         elif "error" in data or data.get("token_status") == "expired":
             parts.append(f"{p['oneline_label']}: {fail_icon(data)}")
@@ -1824,6 +1907,8 @@ Example Output:
     parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
     parser.add_argument("--cache-ttl", type=int, metavar="SECONDS",
                         help="Override default TTL (default: 60, implies --cached)")
+    parser.add_argument("--no-stale-fallback", action="store_true",
+                        help="Disable stale-cache fallback for transient API errors")
     args = parser.parse_args()
 
     # Determine cache settings
@@ -1885,8 +1970,23 @@ Example Output:
                         except Exception as exc:
                             results[p["key"]] = {"error": str(exc)}
 
-        # Always write cache for future --cached calls
+        # Read stale cache BEFORE writing so the fallback age reflects the
+        # previous good entry, not the write we're about to do.  Bounded by
+        # STALE_CACHE_MAX_AGE (ignores normal TTL).
+        stale_cached = None
+        if not args.no_stale_fallback:
+            stale_cached = read_cache(cache_ttl, max_age=STALE_CACHE_MAX_AGE)
+
+        # Always write cache for future --cached calls.
+        # Extended merge preserves prior good entries when this run hit a
+        # transient error, so the cache stays the best known data.
         write_cache(results)
+
+        # Apply stale-cache fallback: replace transient errors with the
+        # last good cached entry (annotated with its age).
+        if stale_cached is not None:
+            cached_data, cached_age = stale_cached
+            results = apply_stale_fallback(results, cached_data, cached_age)
 
     if args.json:
         print(json.dumps(results, indent=2))

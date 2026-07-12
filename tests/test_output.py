@@ -636,3 +636,75 @@ class TestOnelineExpiredToken:
         print_oneline(results, "5h", use_color=True)
         captured = capsys.readouterr()
         assert "expired" in captured.out
+
+
+class TestOnelineStaleFallback:
+    """Stale-cache fallback entries render a visible age marker in oneline."""
+
+    def test_stale_marker_shown(self, capsys):
+        results = {"zai": {
+            "status": "ok",
+            "token_quota": {"percentage": 1},
+            "stale_fallback": True,
+            "stale_age_seconds": 1920,  # 32m
+        }}
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+        assert "Z.AI: 1% (5h)" in captured.out
+        assert "(stale 32m)" in captured.out
+
+    def test_non_stale_no_marker(self, capsys):
+        results = {"zai": {
+            "status": "ok",
+            "token_quota": {"percentage": 1},
+        }}
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+        assert "stale" not in captured.out
+
+    def test_stale_marker_seconds(self, capsys):
+        results = {"zai": {
+            "status": "ok",
+            "token_quota": {"percentage": 1},
+            "stale_fallback": True,
+            "stale_age_seconds": 42,
+        }}
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+        assert "(stale 42s)" in captured.out
+
+    def test_stale_marker_with_color(self, capsys):
+        results = {"zai": {
+            "status": "ok",
+            "token_quota": {"percentage": 1},
+            "stale_fallback": True,
+            "stale_age_seconds": 300,
+        }}
+        print_oneline(results, "5h", use_color=True)
+        captured = capsys.readouterr()
+        assert "(stale 5m)" in captured.out
+
+
+class TestPrintSectionStaleFallback:
+    """Detailed output shows a stale-fallback notice line."""
+
+    def test_stale_line_shown(self, capsys):
+        data = {
+            "status": "ok",
+            "five_hour": {"used": "45.0%"},
+            "stale_fallback": True,
+            "stale_age_seconds": 1800,
+        }
+        print_section("Claude Code", data)
+        captured = capsys.readouterr()
+        assert "Stale fallback" in captured.out
+        assert "30m" in captured.out
+
+    def test_non_stale_no_stale_line(self, capsys):
+        data = {
+            "status": "ok",
+            "five_hour": {"used": "45.0%"},
+        }
+        print_section("Claude Code", data)
+        captured = capsys.readouterr()
+        assert "Stale fallback" not in captured.out
