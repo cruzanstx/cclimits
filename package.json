@@ -3,7 +3,7 @@
   "version": "1.3.0",
   "description": "Check quota/usage for AI coding CLI tools (Claude Code, OpenAI Codex, Google Gemini CLI, Z.AI)",
   "bin": {
-    "cclimits": "./bin/cclimits.js"
+    "cclimits": "bin/cclimits.js"
   },
   "files": [
     "bin",

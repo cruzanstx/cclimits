@@ -24,10 +24,12 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+      # NOTE: no registry-url here — setup-node's registry-url writes an
+      # .npmrc _authToken placeholder that preempts the OIDC exchange and
+      # breaks Trusted Publishing (npm then 404s the PUT as unauthenticated).
       - uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
-          registry-url: https://registry.npmjs.org
       - name: Verify tag matches package.json version
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
