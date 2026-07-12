@@ -3,6 +3,7 @@ Tests for CLI entry point and argument parsing.
 """
 
 import json
+import time
 from io import StringIO
 from unittest.mock import patch, MagicMock
 import pytest
@@ -574,3 +575,90 @@ class TestCachedBypassFix:
         mock_or_usage.return_value = {"status": "ok", "total_credits": 100, "total_usage": 50}
         main()
         mock_or_usage.assert_called_once()
+
+
+class TestParallelFetch:
+    """Tests for concurrent provider fetching via ThreadPoolExecutor."""
+
+    @patch('cclimits.get_synthetic_credentials', return_value="fake_key")
+    @patch('cclimits.get_antigravity_credentials', return_value={"access_token": "fake"})
+    @patch('cclimits.get_kimi_credentials', return_value="fake_key")
+    @patch('cclimits.get_openrouter_credentials', return_value="fake_key")
+    @patch('cclimits.get_synthetic_usage')
+    @patch('cclimits.get_antigravity_usage')
+    @patch('cclimits.get_kimi_usage')
+    @patch('cclimits.get_openrouter_usage')
+    @patch('cclimits.get_zai_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('sys.argv', ['cclimits', '--json'])
+    def test_canonical_order_all_providers(
+            self, mock_claude, mock_codex, mock_gemini, mock_zai,
+            mock_or, mock_kimi, mock_ag, mock_syn,
+            mock_or_creds, mock_kimi_creds, mock_ag_creds, mock_syn_creds, capsys):
+        """All selected providers are fetched and results appear in canonical order."""
+        mock_claude.return_value = {"status": "ok", "p": 1}
+        mock_codex.return_value = {"status": "ok", "p": 2}
+        mock_gemini.return_value = {"status": "ok", "p": 3}
+        mock_zai.return_value = {"status": "ok", "p": 4}
+        mock_or.return_value = {"status": "ok", "p": 5}
+        mock_kimi.return_value = {"status": "ok", "p": 6}
+        mock_ag.return_value = {"status": "ok", "p": 7}
+        mock_syn.return_value = {"status": "ok", "p": 8}
+
+        main()
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        # Keys must appear in canonical provider order
+        assert list(result.keys()) == [
+            "claude", "codex", "gemini", "zai",
+            "openrouter", "kimi", "antigravity", "synthetic",
+        ]
+        # Every usage function should have been called exactly once
+        mock_claude.assert_called_once()
+        mock_codex.assert_called_once()
+        mock_gemini.assert_called_once()
+        mock_zai.assert_called_once()
+        mock_or.assert_called_once()
+        mock_kimi.assert_called_once()
+        mock_ag.assert_called_once()
+        mock_syn.assert_called_once()
+
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('sys.argv', ['cclimits', '--json', '--claude', '--codex'])
+    def test_provider_exception_isolated(self, mock_codex, mock_claude, capsys):
+        """A provider that raises is captured as error; others succeed."""
+        mock_claude.return_value = {"status": "ok"}
+        mock_codex.side_effect = RuntimeError("boom")
+
+        main()
+
+        captured = capsys.readouterr()
+        result = json.loads(captured.out)
+
+        assert result["claude"]["status"] == "ok"
+        assert result["codex"]["error"] == "boom"
+
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('sys.argv', ['cclimits', '--claude', '--codex'])
+    def test_concurrent_fetch_timing(self, mock_codex, mock_claude, capsys):
+        """Two providers each sleeping 0.3s should complete well under 0.6s."""
+        def slow_fetch():
+            time.sleep(0.3)
+            return {"status": "ok"}
+
+        mock_claude.side_effect = slow_fetch
+        mock_codex.side_effect = slow_fetch
+
+        start = time.monotonic()
+        main()
+        elapsed = time.monotonic() - start
+
+        assert elapsed < 0.55, (
+            f"Expected concurrent execution (<0.55s), took {elapsed:.2f}s"
+        )
