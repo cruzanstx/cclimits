@@ -1,5 +1,24 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-12: Stale-Cache Fallback for Transient API Errors
+
+- When a live fetch fails with a transient error (connection error, HTTP 5xx, generic "API error" / "Could not fetch usage") but the cache holds a previous good entry for that provider, the stale entry is served with a visible age marker instead of ❌
+- **Rationale**: extends the v1.2.15 cache-merge principle ("a run that CAN'T check a provider shouldn't destroy known-good data") to display time — a 30-minute-old quota reading is more useful in a statusline than an error icon from a momentary API blip
+- **Qualification rules** (which failures trigger fallback):
+  - Transient (served stale): connection errors (`http_get` status 0 → "API error (0)"/"HTTP 0"), HTTP 5xx, "API error", "Could not fetch usage", generic exceptions
+  - NOT transient (error shown as-is): `No credentials found` (🔑 config issue), `Token expired`/`token_status: "expired"` (⏰ actionable), `Invalid API key`/`Forbidden`/`Authentication failed` (user must act), any error string containing "401" or "403"
+- **Good cached entry**: `status` of `ok` or `authenticated` (same notion as `merge_cache_data` implies)
+- **Staleness cap**: `STALE_CACHE_MAX_AGE = 24 * 60 * 60` (24h) — entries older than this are not served; the error is shown instead
+- **Labeling**: substituted entries annotated with `stale_age_seconds` (int) and `stale_fallback = True` (bool); oneline renders `(stale 32m)` suffix (yellow in `--noemoji` color mode); detailed output prints `💤 Stale fallback (last good: 32m ago)`; JSON output carries both annotation fields for scripted consumers
+- **Merge-rule extension**: `merge_cache_data` now also preserves prior good entries when the new run hits a transient error (not just `NO_CREDS_ERROR`). Decision: transient errors are akin to "can't check" — the API was temporarily unreachable — so the same preservation principle applies. This keeps the cache the best known data across multiple consecutive blips; without it, the first blip would poison the cache and subsequent stale fallbacks would have nothing to serve
+- **Where it hooks in**: after live fetches complete in `main()`, before output. Reads the stale cache BEFORE `write_cache` (to preserve original age for the marker), writes the cache (extended merge preserves good entries), then applies `apply_stale_fallback(results, cached_data, cached_age)` to replace transient errors with annotated stale entries
+- **`read_cache` extension**: added optional `max_age` parameter — when provided, TTL is ignored and entries up to `max_age` seconds old are returned (for stale fallback reads); when `None` (default), behaves exactly as before
+- **Both modes covered**: plain runs (no `--cached`) and `--cached` runs whose TTL missed — a TTL miss followed by a failed fetch is the exact statusline scenario that motivated v1.2.15
+- **Opt-out**: `--no-stale-fallback` flag disables the feature; default is ON
+- **New functions**: `_is_transient_error(data)`, `_is_good_cache_entry(data)`, `apply_stale_fallback(results, cached_data, cached_age, max_age)`
+- **Tests**: 205 total (42 new) — `_is_transient_error` classification (13 cases), `apply_stale_fallback` substitution (9 cases), `read_cache` max_age (3 cases), merge transient preservation (2 cases), oneline stale marker (4 cases), detailed stale line (2 cases), CLI integration (9 cases: transient→stale, JSON annotation, no-creds/expired/401 not replaced, >24h cap, `--no-stale-fallback`, `--cached` TTL miss, detailed output)
+- **Files**: `lib/cclimits.py`, `tests/test_utils.py`, `tests/test_output.py`, `tests/test_cli.py`, `memory-bank/deltas.md`
+
 ## 2026-07-12: Provider Registry Refactor
 
 - Refactored per-provider duplication in `lib/cclimits.py` into a data-driven `PROVIDERS` registry (~93 lines saved, 2004 → 1911)
