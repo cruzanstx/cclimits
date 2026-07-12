@@ -83,11 +83,23 @@ git push --tags
 
 ## Publishing Workflow
 
+There are two paths:
+
+### Automated (CI publish via tag push)
+
 1. Make changes to `lib/cclimits.py`
 2. Update `memory-bank/deltas.md` and `progress.md`
-3. Bump version: `npm version patch`
-4. Publish: `npm publish`
-5. Push tags: `git push --tags`
+3. Bump version: `npm version patch` (creates the tag)
+4. Push the tag: `git push --tags`
+5. The `publish.yml` workflow runs the test suite, verifies the tag matches `package.json`, then runs `npm publish --provenance --access public` using the `NPM_TOKEN` repo secret
+
+**Prerequisite**: A granular automation token named `NPM_TOKEN` must exist in the repo's GitHub Actions secrets.
+
+### Manual (fallback)
+
+1. `npm version patch`
+2. `npm publish`
+3. `git push --tags`
 
 **Note**: npm publish requires 2FA or automation token with bypass.
 

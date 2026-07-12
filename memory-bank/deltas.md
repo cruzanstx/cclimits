@@ -1,5 +1,15 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-12: GitHub Actions CI + Automated npm Publishing
+
+- Added `.github/workflows/ci.yml`: runs the 163-test pytest suite on push to main and pull requests across a Python 3.9/3.11/3.13 matrix with two HTTP-backend flavors — one with `requests` installed (full suite), one without (urllib fallback; `-k "not WithRequests"` skips the 9 tests that mock the requests library). Also runs a `node bin/cclimits.js --help` wrapper smoke test.
+- Added `.github/workflows/publish.yml`: triggered by `v*` tags — runs the test suite, verifies the tag version matches `package.json`, then publishes to npm with `--provenance --access public` using the `NPM_TOKEN` secret. Requires `id-token: write` permission for provenance.
+- Added `requirements-dev.txt` (pytest, requests) for dev dependency tracking.
+- Added CI status badge to `README.md`.
+- Updated `CLAUDE.md` Publishing Workflow section to document both automated (tag-push) and manual paths.
+
+**Files:** `.github/workflows/ci.yml`, `.github/workflows/publish.yml`, `requirements-dev.txt`, `README.md`, `CLAUDE.md`, `memory-bank/deltas.md`, `memory-bank/activeContext.md`
+
 ## 2026-07-12: Parallel Provider Fetching via ThreadPoolExecutor
 
 - `main()` now builds a list of (provider_name, fetch_callable) pairs using the same dispatch logic, then submits them to a `concurrent.futures.ThreadPoolExecutor` (max_workers = number of selected providers) so a full run takes ~max(provider_latencies) instead of sum(provider_latencies)
