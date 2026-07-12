@@ -1,5 +1,14 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-12: Cache-Bypass Fix for Last Four Providers
+
+- `main()` dispatch lines for openrouter, kimi, antigravity, and synthetic were missing the `not skip_fetch` guard that the first four providers already had; on a `--cached` cache hit these four still ran credential discovery + live HTTP fetches and overwrote cached entries, defeating the cache (Antigravity alone can make 2+ round-trips + a token refresh)
+- Added `not skip_fetch and` to all four dispatch lines, matching the existing pattern for claude/codex/gemini/zai
+- Regression tests added in `TestCachedBypassFix`: cache hit asserts zero calls to all 8 usage functions and 4 credential-discovery functions; cache miss verifies explicit-flag-forces-fetch and check_all-conditional-fetch semantics; `--openrouter --cached` missing-from-cache refetch path verified
+- Tests: 155 passing (5 new)
+
+**Files:** `lib/cclimits.py`, `tests/test_cli.py`, `memory-bank/deltas.md`
+
 ## 2026-07-02: Expired Tokens Visible in Oneline
 
 - Expired OAuth tokens no longer silently vanish from `--oneline`: entries with `token_status: "expired"` (Gemini/Codex 401 paths return these with no `error` key) or `error: "Token expired"` (Claude) now render as ⏰ (`expired` in yellow with `--noemoji`)

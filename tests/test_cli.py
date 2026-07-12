@@ -470,3 +470,107 @@ class TestCachedProviderFilter:
         mock_zai.return_value = {"status": "ok", "token_quota": {"percentage": 30.0}}
         main()
         mock_zai.assert_called_once()
+
+
+class TestCachedBypassFix:
+    """Regression tests: cache hit must skip the last four providers' fetches
+    and credential discovery (openrouter, kimi, antigravity, synthetic).
+
+    Previously these four dispatch lines in main() lacked the ``not skip_fetch``
+    guard, so a cache hit still triggered live HTTP round-trips and credential
+    probing for them, then overwrote the cached entries.
+    """
+
+    @patch('cclimits.get_synthetic_usage')
+    @patch('cclimits.get_antigravity_usage')
+    @patch('cclimits.get_kimi_usage')
+    @patch('cclimits.get_openrouter_usage')
+    @patch('cclimits.get_synthetic_credentials')
+    @patch('cclimits.get_antigravity_credentials')
+    @patch('cclimits.get_kimi_credentials')
+    @patch('cclimits.get_openrouter_credentials')
+    @patch('cclimits.get_zai_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('sys.argv', ['cclimits', '--cached'])
+    def test_cache_hit_skips_last_four(
+        self, mock_claude, mock_codex, mock_gemini, mock_zai,
+        mock_or_creds, mock_kimi_creds, mock_ag_creds, mock_syn_creds,
+        mock_or_usage, mock_kimi_usage, mock_ag_usage, mock_syn_usage, capsys):
+        """Cache hit: zero usage fetches and zero credential probing for all 8 providers."""
+        import cclimits
+        cclimits.write_cache({
+            "claude": {"status": "ok", "five_hour": {"used": "45.5%"}},
+            "codex": {"status": "ok", "primary_window": {"used": "35.0%"}},
+            "gemini": {"status": "ok", "models": {}},
+            "zai": {"status": "ok", "token_quota": {"percentage": 30.0}},
+            "openrouter": {"status": "ok", "total_credits": 100, "total_usage": 50},
+            "kimi": {"status": "ok", "balance": 100},
+            "antigravity": {"status": "ok", "models": {}},
+            "synthetic": {"status": "ok", "subscription": {"percentage": 10.0}},
+        })
+        main()
+        # No usage functions should fire
+        mock_claude.assert_not_called()
+        mock_codex.assert_not_called()
+        mock_gemini.assert_not_called()
+        mock_zai.assert_not_called()
+        mock_or_usage.assert_not_called()
+        mock_kimi_usage.assert_not_called()
+        mock_ag_usage.assert_not_called()
+        mock_syn_usage.assert_not_called()
+        # No credential discovery should fire
+        mock_or_creds.assert_not_called()
+        mock_kimi_creds.assert_not_called()
+        mock_ag_creds.assert_not_called()
+        mock_syn_creds.assert_not_called()
+
+    @patch('cclimits.get_openrouter_credentials')
+    @patch('cclimits.get_openrouter_usage')
+    @patch('sys.argv', ['cclimits', '--openrouter'])
+    def test_cache_miss_explicit_flag_forces_fetch(self, mock_or_usage, mock_or_creds, capsys):
+        """Cache miss with explicit --openrouter: fetch runs even without credentials."""
+        mock_or_usage.return_value = {"status": "ok", "total_credits": 100, "total_usage": 50}
+        main()
+        mock_or_creds.assert_not_called()  # explicit flag short-circuits credential check
+        mock_or_usage.assert_called_once()
+
+    @patch('cclimits.get_zai_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_openrouter_credentials', return_value="fake_key")
+    @patch('cclimits.get_openrouter_usage')
+    @patch('sys.argv', ['cclimits'])
+    def test_cache_miss_check_all_fetches_when_creds_exist(
+        self, mock_or_usage, mock_or_creds, mock_claude, mock_codex, mock_gemini, mock_zai, capsys):
+        """Cache miss, check_all, credentials present: openrouter is fetched."""
+        mock_or_usage.return_value = {"status": "ok", "total_credits": 100, "total_usage": 50}
+        main()
+        mock_or_creds.assert_called_once()
+        mock_or_usage.assert_called_once()
+
+    @patch('cclimits.get_zai_usage')
+    @patch('cclimits.get_gemini_usage')
+    @patch('cclimits.get_codex_usage')
+    @patch('cclimits.get_claude_usage')
+    @patch('cclimits.get_openrouter_credentials', return_value=None)
+    @patch('cclimits.get_openrouter_usage')
+    @patch('sys.argv', ['cclimits'])
+    def test_cache_miss_check_all_skips_when_no_creds(
+        self, mock_or_usage, mock_or_creds, mock_claude, mock_codex, mock_gemini, mock_zai, capsys):
+        """Cache miss, check_all, no credentials: openrouter is skipped."""
+        main()
+        mock_or_creds.assert_called_once()
+        mock_or_usage.assert_not_called()
+
+    @patch('cclimits.get_openrouter_usage')
+    @patch('sys.argv', ['cclimits', '--openrouter', '--cached'])
+    def test_openrouter_cached_missing_from_cache_refetches(self, mock_or_usage, capsys):
+        """--openrouter --cached with openrouter absent from cache must refetch."""
+        import cclimits
+        cclimits.write_cache({"claude": {"status": "ok", "five_hour": {"used": "45.5%"}}})
+        mock_or_usage.return_value = {"status": "ok", "total_credits": 100, "total_usage": 50}
+        main()
+        mock_or_usage.assert_called_once()
