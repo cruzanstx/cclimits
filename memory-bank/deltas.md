@@ -1,5 +1,19 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-12: Provider Registry Refactor
+
+- Refactored per-provider duplication in `lib/cclimits.py` into a data-driven `PROVIDERS` registry (~93 lines saved, 2004 → 1911)
+- **What was duplicated**: `print_oneline()` had 8 near-identical ~25-line provider blocks; `main()` had 8 hand-written argparse flags, 8 dispatch `if`-lines, 8 `print_section()` calls, and a hardcoded canonical-order tuple; argparse had 8 copy-pasted `--<provider>` flags
+- **What the registry drives**: argparse flag creation, `requested` list, fetch dispatch (with gated/ungated credential semantics), canonical-order result collection, detailed `print_section` loop, and `print_oneline` iteration
+- **Shared renderers**: `_fmt_both` (dual-window percent), `_fmt_single` (single-window percent with suffix), `_fmt_balance` (balance with threshold ladder) — Z.AI's integer percents / `request_quota` second value / `(5h)` suffix fallback and Synthetic's `weekly_credits.percent_used` handled via per-provider extractor lambdas, not by re-forking the renderer
+- **Two renderer factories**: `_make_str_pct_renderer` (Claude/Codex string-based percents) and `_make_balance_renderer` (OpenRouter/Kimi balance with currency symbol)
+- **Fail branch unified**: `fail_icon` (🔑 no-creds / ⏰ expired / ❌ error) applied in one place in the `print_oneline` loop, not per-provider
+- **Test patching preserved**: fetch/credential functions stored as name strings, resolved via `globals()` at call time so `@patch('cclimits.get_X_usage')` still intercepts
+- **Byte-identical output**: all 163 tests pass with zero assertion changes; live output diffs show only timestamp and real-time data differences
+- **Extension point**: adding a provider now requires one `PROVIDERS` entry + one fetch function (+ a custom renderer if the shared factories don't fit) — no edits to `main()` or `print_oneline()` internals
+
+**Files:** `lib/cclimits.py`, `memory-bank/systemPatterns.md`, `memory-bank/deltas.md`
+
 ## 2026-07-12: GitHub Actions CI + Automated npm Publishing
 
 - Added `.github/workflows/ci.yml`: runs the 163-test pytest suite on push to main and pull requests across a Python 3.9/3.11/3.13 matrix with two HTTP-backend flavors — one with `requests` installed (full suite), one without (urllib fallback; `-k "not WithRequests"` skips the 9 tests that mock the requests library). Also runs a `node bin/cclimits.js --help` wrapper smoke test.
