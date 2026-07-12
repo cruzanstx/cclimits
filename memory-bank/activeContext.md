@@ -2,13 +2,14 @@
 
 ## Current Focus
 
-- Cache robustness + status-visibility hardening complete (v1.2.15–1.2.18, 2026-07-02); back to maintenance
+- v1.3.0 released 2026-07-12 via the new automated pipeline; back to maintenance
 - Researching additional AI coding providers (Cursor, Copilot, Replit, etc.)
 
 ## Recent Changes (Last 7 Days)
 
-- **2026-07-02**: v1.2.15–1.2.18 released — see `deltas.md`: cache merge (no-creds/partial runs no longer clobber good entries), atomic cache writes, provider filters honored on cache hits, cached-output age labels, Z.AI data cleanup (no fake token counts, plan level, tokens%/requests% in `both` mode), distinct oneline icons (🔑 no credentials, ⏰ expired token, ❌ real error)
-- Root cause that kicked this off: a background statusline/cron shell without `ZAI_API_KEY` was poisoning the shared cache, so `--oneline --cached` showed `Z.AI: ❌` while direct probes were healthy
+- **2026-07-12**: **v1.3.0 released** — first release through the new tag-push pipeline (npm Trusted Publishing/OIDC, provenance attested). Five changes in one release, see `deltas.md`: cache-hit bypass bug fix (openrouter/kimi/antigravity/synthetic no longer fetch live on cache hits), concurrent provider fetching (ThreadPoolExecutor; wall time ≈ slowest provider), GitHub Actions CI (3.9/3.11/3.13 × requests/urllib matrix) + automated publish, data-driven `PROVIDERS` registry refactor (byte-identical output, −93 lines), stale-cache fallback (transient failures serve <24h-old good entries with stale marker). Suite: 155 → 205 tests
+- Publishing gotchas hit and fixed: `setup-node` `registry-url` breaks the OIDC exchange (E404); newer npm strips `./`-prefixed bin paths at publish (would have broken `npx cclimits`) — `npm pkg fix` applied
+- **2026-07-02**: v1.2.15–1.2.18 released — see `deltas.md`: cache merge, atomic cache writes, provider filters on cache hits, cached-output age labels, Z.AI data cleanup, distinct oneline icons (🔑/⏰/❌)
 
 ## Blocked/Waiting
 

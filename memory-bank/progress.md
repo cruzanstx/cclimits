@@ -24,6 +24,9 @@
 - ✅ Gemini models grouped by quota tier (3-Flash, Flash, Pro)
 - ✅ Antigravity models sorted by tightest remaining quota with min/avg summary; compact oneline displays tightest model usage percentage
 - ✅ Research on additional providers completed (`research/ai-coding-providers.md`)
+- ✅ Providers fetched concurrently; cache hits skip all network/credential calls; transient failures fall back to <24h-old cached data with stale marker (v1.3.0)
+- ✅ Data-driven `PROVIDERS` registry — adding a provider is one registry entry + one fetch function
+- ✅ CI (GitHub Actions matrix) + automated npm publish on `v*` tags via Trusted Publishing (OIDC); 205 tests
 
 ## Known Issues
 
