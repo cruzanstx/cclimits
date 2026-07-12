@@ -10,6 +10,8 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1919,25 +1921,51 @@ Example Output:
     if not skip_fetch:
         results = {}
 
-    if not skip_fetch and (check_all or args.claude):
-        results["claude"] = get_claude_usage()
-    if not skip_fetch and (check_all or args.codex):
-        results["codex"] = get_codex_usage()
-    if not skip_fetch and (check_all or args.gemini):
-        results["gemini"] = get_gemini_usage()
-    if not skip_fetch and (check_all or args.zai):
-        results["zai"] = get_zai_usage()
-    if not skip_fetch and (args.openrouter or (check_all and get_openrouter_credentials())):
-        results["openrouter"] = get_openrouter_usage()
-    if not skip_fetch and (args.kimi or (check_all and get_kimi_credentials())):
-        results["kimi"] = get_kimi_usage()
-    if not skip_fetch and (args.antigravity or (check_all and get_antigravity_credentials())):
-        results["antigravity"] = get_antigravity_usage()
-    if not skip_fetch and (args.synthetic or (check_all and get_synthetic_credentials())):
-        results["synthetic"] = get_synthetic_usage()
+        # Build the work list using the same dispatch logic as before.
+        # Credential discovery for the gated providers (openrouter, kimi,
+        # antigravity, synthetic) runs before submission — same as the
+        # original sequential code — so that check_all runs without
+        # credentials simply omit the provider.  The actual HTTP fetches
+        # then run concurrently in a thread pool so the total wall time
+        # approximates the slowest single provider rather than the sum.
+        work: list[tuple[str, Callable[[], dict]]] = []
 
-    # Always write cache for future --cached calls
-    if not skip_fetch:
+        if check_all or args.claude:
+            work.append(("claude", get_claude_usage))
+        if check_all or args.codex:
+            work.append(("codex", get_codex_usage))
+        if check_all or args.gemini:
+            work.append(("gemini", get_gemini_usage))
+        if check_all or args.zai:
+            work.append(("zai", get_zai_usage))
+
+        if args.openrouter or (check_all and get_openrouter_credentials()):
+            work.append(("openrouter", get_openrouter_usage))
+        if args.kimi or (check_all and get_kimi_credentials()):
+            work.append(("kimi", get_kimi_usage))
+        if args.antigravity or (check_all and get_antigravity_credentials()):
+            work.append(("antigravity", get_antigravity_usage))
+        if args.synthetic or (check_all and get_synthetic_credentials()):
+            work.append(("synthetic", get_synthetic_usage))
+
+        if work:
+            with ThreadPoolExecutor(max_workers=len(work)) as executor:
+                future_map = {
+                    name: executor.submit(fn) for name, fn in work
+                }
+                # Collect results in canonical provider order, not
+                # completion order, so output (especially --json key
+                # order) is deterministic.
+                for name in ("claude", "codex", "gemini", "zai",
+                             "openrouter", "kimi", "antigravity",
+                             "synthetic"):
+                    if name in future_map:
+                        try:
+                            results[name] = future_map[name].result()
+                        except Exception as exc:
+                            results[name] = {"error": str(exc)}
+
+        # Always write cache for future --cached calls
         write_cache(results)
 
     if args.json:

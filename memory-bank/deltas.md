@@ -1,5 +1,17 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-12: Parallel Provider Fetching via ThreadPoolExecutor
+
+- `main()` now builds a list of (provider_name, fetch_callable) pairs using the same dispatch logic, then submits them to a `concurrent.futures.ThreadPoolExecutor` (max_workers = number of selected providers) so a full run takes ~max(provider_latencies) instead of sum(provider_latencies)
+- Credential discovery for the four gated providers (openrouter, kimi, antigravity, synthetic) still runs before submission in the main thread, preserving the check_all-conditional-fetch semantics and the module-level patch pattern used by tests
+- Results are collected in canonical provider order (claude, codex, gemini, zai, openrouter, kimi, antigravity, synthetic) by iterating `future.result()` in that order — deterministic `--json` key order and `--oneline` output preserved
+- A provider whose worker raises an unexpected exception is captured as `{"error": "..."}` for that provider only; one bad provider can no longer blank out the statusline
+- Zero new dependencies: `ThreadPoolExecutor` is stdlib (Python 3.2+, well within the 3.9+ floor)
+- New tests in `TestParallelFetch`: canonical ordering with all 8 providers, exception isolation (one provider raises, others succeed), concurrency timing (two providers each sleeping 0.3s finish < 0.55s)
+- Tests: 163 passing (3 new; all 160 existing pass unchanged)
+
+**Files:** `lib/cclimits.py`, `tests/test_cli.py`, `memory-bank/deltas.md`
+
 ## 2026-07-12: Cache-Bypass Fix for Last Four Providers
 
 - `main()` dispatch lines for openrouter, kimi, antigravity, and synthetic were missing the `not skip_fetch` guard that the first four providers already had; on a `--cached` cache hit these four still ran credential discovery + live HTTP fetches and overwrote cached entries, defeating the cache (Antigravity alone can make 2+ round-trips + a token refresh)
