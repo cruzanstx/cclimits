@@ -1590,6 +1590,150 @@ def get_status_icon(pct: float) -> str:
         return "✅"
 
 
+# Shared oneline formatting helpers
+
+def _fmt_both(label, s5, s7, use_color):
+    """Dual-window: 'Label: X%/Y% <icon>'"""
+    m = max(float(s5), float(s7))
+    d = f"{s5}%/{s7}%"
+    return f"{label}: {colorize_pct(d, m)}" if use_color else f"{label}: {d} {get_status_icon(m)}"
+
+
+def _fmt_single(label, inner, pct, suffix, use_color):
+    """Single window; *suffix* goes outside the color span."""
+    if use_color:
+        s = f"{label}: {colorize_pct(inner, pct)}"
+        return f"{s} {suffix}" if suffix else s
+    if suffix:
+        return f"{label}: {inner} {suffix} {get_status_icon(pct)}"
+    return f"{label}: {inner} {get_status_icon(pct)}"
+
+
+def _fmt_balance(label, balance_str, balance, use_color):
+    """Prepaid-balance line with shared threshold ladder."""
+    if use_color:
+        c = COLORS['bold_red'] if balance <= 0 else COLORS['red'] if balance < 1.0 else COLORS['yellow'] if balance < 5.0 else COLORS['green']
+        return f"{label}: {c}{balance_str}{COLORS['reset']}"
+    return f"{label}: {balance_str} {'❌' if balance <= 0 else '🔴' if balance < 1.0 else '⚠️' if balance < 5.0 else '✅'}"
+
+
+# Per-provider oneline renderers
+
+def _make_str_pct_renderer(label, ok_check, w5_key, w7d_key):
+    """Factory for Claude/Codex-style percent-dual renderers (string percents)."""
+    def _r(data, window, use_color):
+        if not ok_check(data):
+            return None
+        if window == "both" and w5_key in data and w7d_key in data:
+            return _fmt_both(label, data[w5_key]["used"].rstrip("%"), data[w7d_key]["used"].rstrip("%"), use_color)
+        if window == "5h" and w5_key in data:
+            s = data[w5_key]["used"]
+            return _fmt_single(label, s, float(s.rstrip("%")), "(5h)", use_color)
+        if window == "7d" and w7d_key in data:
+            s = data[w7d_key]["used"]
+            return _fmt_single(label, s, float(s.rstrip("%")), "(7d)", use_color)
+        return None
+    return _r
+
+
+def _make_balance_renderer(label, ok_key, get_balance):
+    """Factory for OpenRouter/Kimi-style balance renderers."""
+    def _r(data, window, use_color):
+        if not (data.get("status") == "ok" and ok_key in data):
+            return None
+        bal, s = get_balance(data)
+        return _fmt_balance(label, s, bal, use_color)
+    return _r
+
+
+def _render_zai(data, window, use_color):
+    if not (data.get("status") == "ok" and "token_quota" in data):
+        return None
+    pct = data["token_quota"].get("percentage", 0)
+    rq = data.get("request_quota", {})
+    if window == "both" and rq.get("limit"):
+        return _fmt_both("Z.AI", str(pct), str(round(rq.get("used", 0) / rq["limit"] * 100)), use_color)
+    return _fmt_single("Z.AI", f"{pct}% (5h)", pct, "", use_color)
+
+
+def _render_synthetic(data, window, use_color):
+    if data.get("status") != "ok":
+        return None
+    p5 = data.get("rolling_5h", {}).get("percentage")
+    p7 = data.get("weekly_credits", {}).get("percent_used")
+    if window == "both" and p5 is not None and p7 is not None:
+        return _fmt_both("Synthetic", str(p5), str(p7), use_color)
+    if window == "7d" and p7 is not None:
+        return _fmt_single("Synthetic", f"{p7}% (7d)", float(p7), "", use_color)
+    if p5 is not None:
+        return _fmt_single("Synthetic", f"{p5}% (5h)", float(p5), "", use_color)
+    return None
+
+
+def _render_gemini(data, window, use_color):
+    if not (data.get("status") == "ok" and "models" in data):
+        return None
+    parts = []
+    for tier in ["3-Flash", "Flash", "Pro"]:
+        for mid in GEMINI_TIERS.get(tier, []):
+            if mid in data["models"]:
+                s = data["models"][mid]["used"]
+                p = float(s.rstrip("%"))
+                parts.append(f"{tier} {colorize_pct(s, p)}" if use_color else f"{tier} {s} {get_status_icon(p)}")
+                break
+    return f"Gemini: ( {' | '.join(parts)} )" if parts else None
+
+
+def _render_antigravity(data, window, use_color):
+    if not (data.get("status") == "ok" and "summary" in data):
+        return None
+    s = data["summary"]
+    used = max(0, 100 - int(s.get("min_remaining_pct", 0)))
+    mc = int(s.get("model_count", 0))
+    if use_color:
+        return f"Antigravity: {colorize_pct(f'{used}%', used)} ({mc} models)"
+    return f"Antigravity: {used}% ({mc} models) {get_status_icon(used)}"
+
+
+# Provider registry — single source of truth.  Adding a provider: one entry
+# here + a fetch function (+ a custom renderer if the shared ones don't fit).
+
+PROVIDERS = [
+    {"key": "claude", "title": "Claude Code", "oneline_label": "Claude",
+     "arg_help": "Only check Claude Code", "fetch": "get_claude_usage",
+     "gated": False, "creds": None, "oneline_order": 0,
+     "render_oneline": _make_str_pct_renderer("Claude", lambda d: d.get("status") == "ok" or "five_hour" in d, "five_hour", "seven_day")},
+    {"key": "codex", "title": "OpenAI Codex", "oneline_label": "Codex",
+     "arg_help": "Only check Codex", "fetch": "get_codex_usage",
+     "gated": False, "creds": None, "oneline_order": 1,
+     "render_oneline": _make_str_pct_renderer("Codex", lambda d: d.get("status") == "ok", "primary_window", "secondary_window")},
+    {"key": "gemini", "title": "Gemini CLI", "oneline_label": "Gemini",
+     "arg_help": "Only check Gemini", "fetch": "get_gemini_usage",
+     "gated": False, "creds": None, "oneline_order": 4,
+     "render_oneline": _render_gemini},
+    {"key": "zai", "title": "Z.AI (5h shared - GLM-4.x)", "oneline_label": "Z.AI",
+     "arg_help": "Only check Z.AI", "fetch": "get_zai_usage",
+     "gated": False, "creds": None, "oneline_order": 2,
+     "render_oneline": _render_zai},
+    {"key": "openrouter", "title": "OpenRouter", "oneline_label": "OpenRouter",
+     "arg_help": "Only check OpenRouter", "fetch": "get_openrouter_usage",
+     "gated": True, "creds": "get_openrouter_credentials", "oneline_order": 5,
+     "render_oneline": _make_balance_renderer("OpenRouter", "balance_usd", lambda d: (d["balance_usd"], f"${d['balance_usd']:.2f}"))},
+    {"key": "kimi", "title": "Kimi K2 (Moonshot AI)", "oneline_label": "Kimi",
+     "arg_help": "Only check Kimi (Moonshot AI)", "fetch": "get_kimi_usage",
+     "gated": True, "creds": "get_kimi_credentials", "oneline_order": 6,
+     "render_oneline": _make_balance_renderer("Kimi", "balance", lambda d: (d["balance"], f"{'$' if d.get('currency', 'USD') == 'USD' else '¥'}{d['balance']:.2f}"))},
+    {"key": "antigravity", "title": "Google Antigravity", "oneline_label": "Antigravity",
+     "arg_help": "Only check Google Antigravity", "fetch": "get_antigravity_usage",
+     "gated": True, "creds": "get_antigravity_credentials", "oneline_order": 7,
+     "render_oneline": _render_antigravity},
+    {"key": "synthetic", "title": "Synthetic.new", "oneline_label": "Synthetic",
+     "arg_help": "Only check Synthetic.new", "fetch": "get_synthetic_usage",
+     "gated": True, "creds": "get_synthetic_credentials", "oneline_order": 3,
+     "render_oneline": _render_synthetic},
+]
+
+
 def print_oneline(results: dict, window: str = "5h", use_color: bool = False, cache_age: int | None = None):
     """Print compact one-liner output"""
     if window not in ("5h", "7d", "both"):
@@ -1608,221 +1752,16 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
             return expired_icon
         return error_icon
 
-    # Claude
-    if "claude" in results:
-        data = results["claude"]
-        if data.get("status") == "ok" or "five_hour" in data:
-            if window == "both" and "five_hour" in data and "seven_day" in data:
-                pct_5h = data["five_hour"]["used"].rstrip("%")
-                pct_7d = data["seven_day"]["used"].rstrip("%")
-                max_pct = max(float(pct_5h), float(pct_7d))
-                pct_display = f"{pct_5h}%/{pct_7d}%"
-                if use_color:
-                    parts.append(f"Claude: {colorize_pct(pct_display, max_pct)}")
-                else:
-                    parts.append(f"Claude: {pct_display} {get_status_icon(max_pct)}")
-            elif window == "5h" and "five_hour" in data:
-                pct_str = data["five_hour"]["used"]
-                pct = float(pct_str.rstrip("%"))
-                if use_color:
-                    parts.append(f"Claude: {colorize_pct(pct_str, pct)} (5h)")
-                else:
-                    parts.append(f"Claude: {pct_str} (5h) {get_status_icon(pct)}")
-            elif window == "7d" and "seven_day" in data:
-                pct_str = data["seven_day"]["used"]
-                pct = float(pct_str.rstrip("%"))
-                if use_color:
-                    parts.append(f"Claude: {colorize_pct(pct_str, pct)} (7d)")
-                else:
-                    parts.append(f"Claude: {pct_str} (7d) {get_status_icon(pct)}")
+    for p in sorted(PROVIDERS, key=lambda p: p["oneline_order"]):
+        key = p["key"]
+        if key not in results:
+            continue
+        data = results[key]
+        rendered = p["render_oneline"](data, window, use_color)
+        if rendered is not None:
+            parts.append(rendered)
         elif "error" in data or data.get("token_status") == "expired":
-            parts.append(f"Claude: {fail_icon(data)}")
-
-    # Codex
-    if "codex" in results:
-        data = results["codex"]
-        if data.get("status") == "ok":
-            if window == "both" and "primary_window" in data and "secondary_window" in data:
-                pct_5h = data["primary_window"]["used"].rstrip("%")
-                pct_7d = data["secondary_window"]["used"].rstrip("%")
-                max_pct = max(float(pct_5h), float(pct_7d))
-                pct_display = f"{pct_5h}%/{pct_7d}%"
-                if use_color:
-                    parts.append(f"Codex: {colorize_pct(pct_display, max_pct)}")
-                else:
-                    parts.append(f"Codex: {pct_display} {get_status_icon(max_pct)}")
-            elif window == "5h" and "primary_window" in data:
-                pct_str = data["primary_window"]["used"]
-                pct = float(pct_str.rstrip("%"))
-                if use_color:
-                    parts.append(f"Codex: {colorize_pct(pct_str, pct)} (5h)")
-                else:
-                    parts.append(f"Codex: {pct_str} (5h) {get_status_icon(pct)}")
-            elif window == "7d" and "secondary_window" in data:
-                pct_str = data["secondary_window"]["used"]
-                pct = float(pct_str.rstrip("%"))
-                if use_color:
-                    parts.append(f"Codex: {colorize_pct(pct_str, pct)} (7d)")
-                else:
-                    parts.append(f"Codex: {pct_str} (7d) {get_status_icon(pct)}")
-        elif "error" in data or data.get("token_status") == "expired":
-            parts.append(f"Codex: {fail_icon(data)}")
-
-    # Z.AI (5h shared quota across GLM models)
-    if "zai" in results:
-        data = results["zai"]
-        if data.get("status") == "ok" and "token_quota" in data:
-            pct = data["token_quota"].get("percentage", 0)
-            rq = data.get("request_quota", {})
-            if window == "both" and rq.get("limit"):
-                # Second value: request quota (tokens% / requests%)
-                req_pct = round(rq.get("used", 0) / rq["limit"] * 100)
-                max_pct = max(float(pct), float(req_pct))
-                pct_display = f"{pct}%/{req_pct}%"
-                if use_color:
-                    parts.append(f"Z.AI: {colorize_pct(pct_display, max_pct)}")
-                else:
-                    parts.append(f"Z.AI: {pct_display} {get_status_icon(max_pct)}")
-            else:
-                pct_str = f"{pct}% (5h)"
-                if use_color:
-                    parts.append(f"Z.AI: {colorize_pct(pct_str, pct)}")
-                else:
-                    parts.append(f"Z.AI: {pct_str} {get_status_icon(pct)}")
-        elif "error" in data or data.get("token_status") == "expired":
-            parts.append(f"Z.AI: {fail_icon(data)}")
-
-    # Synthetic.new (5h rolling + weekly credits)
-    if "synthetic" in results:
-        data = results["synthetic"]
-        if data.get("status") == "ok":
-            pct_5h = data.get("rolling_5h", {}).get("percentage")
-            pct_7d = data.get("weekly_credits", {}).get("percent_used")
-            if window == "both" and pct_5h is not None and pct_7d is not None:
-                max_pct = max(float(pct_5h), float(pct_7d))
-                pct_display = f"{pct_5h}%/{pct_7d}%"
-                if use_color:
-                    parts.append(f"Synthetic: {colorize_pct(pct_display, max_pct)}")
-                else:
-                    parts.append(f"Synthetic: {pct_display} {get_status_icon(max_pct)}")
-            elif window == "7d" and pct_7d is not None:
-                pct_str = f"{pct_7d}% (7d)"
-                if use_color:
-                    parts.append(f"Synthetic: {colorize_pct(pct_str, float(pct_7d))}")
-                else:
-                    parts.append(f"Synthetic: {pct_str} {get_status_icon(float(pct_7d))}")
-            elif pct_5h is not None:
-                pct_str = f"{pct_5h}% (5h)"
-                if use_color:
-                    parts.append(f"Synthetic: {colorize_pct(pct_str, float(pct_5h))}")
-                else:
-                    parts.append(f"Synthetic: {pct_str} {get_status_icon(float(pct_5h))}")
-        elif "error" in data or data.get("token_status") == "expired":
-            parts.append(f"Synthetic: {fail_icon(data)}")
-
-    # Gemini (group by quota tier)
-    if "gemini" in results:
-        data = results["gemini"]
-        if data.get("status") == "ok" and "models" in data:
-            gemini_parts = []
-            # Display tiers in order: 3-Flash, Flash, Pro
-            for tier_name in ["3-Flash", "Flash", "Pro"]:
-                if tier_name not in GEMINI_TIERS:
-                    continue
-                # Find first model in this tier with data
-                for model_id in GEMINI_TIERS[tier_name]:
-                    if model_id in data["models"]:
-                        pct_str = data["models"][model_id]["used"]
-                        pct = float(pct_str.rstrip("%"))
-                        if use_color:
-                            gemini_parts.append(f"{tier_name} {colorize_pct(pct_str, pct)}")
-                        else:
-                            gemini_parts.append(f"{tier_name} {pct_str} {get_status_icon(pct)}")
-                        break  # Only show once per tier
-            if gemini_parts:
-                parts.append(f"Gemini: ( {' | '.join(gemini_parts)} )")
-        elif "error" in data or data.get("token_status") == "expired":
-            parts.append(f"Gemini: {fail_icon(data)}")
-
-
-    # OpenRouter
-    if "openrouter" in results:
-        data = results["openrouter"]
-        if data.get("status") == "ok" and "balance_usd" in data:
-            balance = data["balance_usd"]
-            balance_str = f"${balance:.2f}"
-            # Status thresholds: >$5 ✅, $1-5 ⚠️, <$1 🔴, $0 ❌
-            if use_color:
-                if balance <= 0:
-                    color = COLORS['bold_red']
-                elif balance < 1.0:
-                    color = COLORS['red']
-                elif balance < 5.0:
-                    color = COLORS['yellow']
-                else:
-                    color = COLORS['green']
-                parts.append(f"OpenRouter: {color}{balance_str}{COLORS['reset']}")
-            else:
-                if balance <= 0:
-                    status_icon = "❌"
-                elif balance < 1.0:
-                    status_icon = "🔴"
-                elif balance < 5.0:
-                    status_icon = "⚠️"
-                else:
-                    status_icon = "✅"
-                parts.append(f"OpenRouter: {balance_str} {status_icon}")
-        elif "error" in data or data.get("token_status") == "expired":
-            parts.append(f"OpenRouter: {fail_icon(data)}")
-
-    # Kimi
-    if "kimi" in results:
-        data = results["kimi"]
-        if data.get("status") == "ok" and "balance" in data:
-            balance = data["balance"]
-            currency = data.get("currency", "USD")
-            symbol = "$" if currency == "USD" else "¥"
-            balance_str = f"{symbol}{balance:.2f}"
-            
-            # Status thresholds: >$5 ✅, $1-5 ⚠️, <$1 🔴, $0 ❌
-            if use_color:
-                if balance <= 0:
-                    color = COLORS['bold_red']
-                elif balance < 1.0:
-                    color = COLORS['red']
-                elif balance < 5.0:
-                    color = COLORS['yellow']
-                else:
-                    color = COLORS['green']
-                parts.append(f"Kimi: {color}{balance_str}{COLORS['reset']}")
-            else:
-                if balance <= 0:
-                    status_icon = "❌"
-                elif balance < 1.0:
-                    status_icon = "🔴"
-                elif balance < 5.0:
-                    status_icon = "⚠️"
-                else:
-                    status_icon = "✅"
-                parts.append(f"Kimi: {balance_str} {status_icon}")
-        elif "error" in data or data.get("token_status") == "expired":
-            parts.append(f"Kimi: {fail_icon(data)}")
-
-    # Antigravity
-    if "antigravity" in results:
-        data = results["antigravity"]
-        if data.get("status") == "ok" and "summary" in data:
-            summary = data["summary"]
-            min_pct = int(summary.get("min_remaining_pct", 0))
-            model_count = int(summary.get("model_count", 0))
-            used_pct = max(0, 100 - min_pct)
-            pct_str = f"{used_pct}%"
-            if use_color:
-                parts.append(f"Antigravity: {colorize_pct(pct_str, used_pct)} ({model_count} models)")
-            else:
-                parts.append(f"Antigravity: {pct_str} ({model_count} models) {get_status_icon(used_pct)}")
-        elif "error" in data or data.get("token_status") == "expired":
-            parts.append(f"Antigravity: {fail_icon(data)}")
+            parts.append(f"{p['oneline_label']}: {fail_icon(data)}")
 
     line = " | ".join(parts)
     if cache_age is not None:
@@ -1880,14 +1819,8 @@ Example Output:
                         help="Compact one-liner output (5h, 7d, or both; default: 5h)")
     parser.add_argument("--noemoji", action="store_true",
                         help="Use colored text instead of emojis (for terminals without emoji support)")
-    parser.add_argument("--claude", action="store_true", help="Only check Claude Code")
-    parser.add_argument("--codex", action="store_true", help="Only check Codex")
-    parser.add_argument("--gemini", action="store_true", help="Only check Gemini")
-    parser.add_argument("--zai", action="store_true", help="Only check Z.AI")
-    parser.add_argument("--openrouter", action="store_true", help="Only check OpenRouter")
-    parser.add_argument("--kimi", action="store_true", help="Only check Kimi (Moonshot AI)")
-    parser.add_argument("--antigravity", action="store_true", help="Only check Google Antigravity")
-    parser.add_argument("--synthetic", action="store_true", help="Only check Synthetic.new")
+    for _p in PROVIDERS:
+        parser.add_argument(f"--{_p['key']}", action="store_true", help=_p["arg_help"])
     parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
     parser.add_argument("--cache-ttl", type=int, metavar="SECONDS",
                         help="Override default TTL (default: 60, implies --cached)")
@@ -1898,9 +1831,7 @@ Example Output:
     cache_ttl = args.cache_ttl if args.cache_ttl is not None else DEFAULT_CACHE_TTL
 
     # Which providers were explicitly requested (empty = check all)
-    requested = [name for name in
-                 ("claude", "codex", "gemini", "zai", "openrouter", "kimi", "antigravity", "synthetic")
-                 if getattr(args, name)]
+    requested = [p["key"] for p in PROVIDERS if getattr(args, p["key"])]
     check_all = not requested
 
     # Try to read from cache if caching is enabled
@@ -1921,32 +1852,23 @@ Example Output:
     if not skip_fetch:
         results = {}
 
-        # Build the work list using the same dispatch logic as before.
-        # Credential discovery for the gated providers (openrouter, kimi,
-        # antigravity, synthetic) runs before submission — same as the
-        # original sequential code — so that check_all runs without
-        # credentials simply omit the provider.  The actual HTTP fetches
-        # then run concurrently in a thread pool so the total wall time
-        # approximates the slowest single provider rather than the sum.
+        # Build the work list from the PROVIDERS registry.
+        # Credential discovery for gated providers runs before submission
+        # so that check_all without credentials simply omits the provider.
+        # The actual HTTP fetches then run concurrently in a thread pool so
+        # the total wall time approximates the slowest single provider
+        # rather than the sum.
         work: list[tuple[str, Callable[[], dict]]] = []
 
-        if check_all or args.claude:
-            work.append(("claude", get_claude_usage))
-        if check_all or args.codex:
-            work.append(("codex", get_codex_usage))
-        if check_all or args.gemini:
-            work.append(("gemini", get_gemini_usage))
-        if check_all or args.zai:
-            work.append(("zai", get_zai_usage))
-
-        if args.openrouter or (check_all and get_openrouter_credentials()):
-            work.append(("openrouter", get_openrouter_usage))
-        if args.kimi or (check_all and get_kimi_credentials()):
-            work.append(("kimi", get_kimi_usage))
-        if args.antigravity or (check_all and get_antigravity_credentials()):
-            work.append(("antigravity", get_antigravity_usage))
-        if args.synthetic or (check_all and get_synthetic_credentials()):
-            work.append(("synthetic", get_synthetic_usage))
+        for p in PROVIDERS:
+            pkey = p["key"]
+            if p["gated"]:
+                cred_fn = globals()[p["creds"]]
+                if getattr(args, pkey) or (check_all and cred_fn()):
+                    work.append((pkey, globals()[p["fetch"]]))
+            else:
+                if check_all or getattr(args, pkey):
+                    work.append((pkey, globals()[p["fetch"]]))
 
         if work:
             with ThreadPoolExecutor(max_workers=len(work)) as executor:
@@ -1956,14 +1878,12 @@ Example Output:
                 # Collect results in canonical provider order, not
                 # completion order, so output (especially --json key
                 # order) is deterministic.
-                for name in ("claude", "codex", "gemini", "zai",
-                             "openrouter", "kimi", "antigravity",
-                             "synthetic"):
-                    if name in future_map:
+                for p in PROVIDERS:
+                    if p["key"] in future_map:
                         try:
-                            results[name] = future_map[name].result()
+                            results[p["key"]] = future_map[p["key"]].result()
                         except Exception as exc:
-                            results[name] = {"error": str(exc)}
+                            results[p["key"]] = {"error": str(exc)}
 
         # Always write cache for future --cached calls
         write_cache(results)
@@ -1978,22 +1898,9 @@ Example Output:
         cached_note = f"  (cached {format_cache_age(cache_age)} ago)" if cache_age is not None else ""
         print(f"   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{cached_note}")
 
-        if "claude" in results:
-            print_section("Claude Code", results["claude"])
-        if "codex" in results:
-            print_section("OpenAI Codex", results["codex"])
-        if "gemini" in results:
-            print_section("Gemini CLI", results["gemini"])
-        if "zai" in results:
-            print_section("Z.AI (5h shared - GLM-4.x)", results["zai"])
-        if "openrouter" in results:
-            print_section("OpenRouter", results["openrouter"])
-        if "kimi" in results:
-            print_section("Kimi K2 (Moonshot AI)", results["kimi"])
-        if "antigravity" in results:
-            print_section("Google Antigravity", results["antigravity"])
-        if "synthetic" in results:
-            print_section("Synthetic.new", results["synthetic"])
+        for p in PROVIDERS:
+            if p["key"] in results:
+                print_section(p["title"], results[p["key"]])
 
         print("\n" + "="*50)
         print("  Done!")
