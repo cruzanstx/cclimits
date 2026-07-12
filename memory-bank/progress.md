@@ -35,7 +35,7 @@ None currently.
 - **Replit Integration**: Endpoint identified (`usage-credits-balance`), awaiting implementation.
 
 ### Medium Priority
-- CI/CD pipeline for npm publishing
+- ~~CI/CD pipeline for npm publishing~~ ✅ Done (2026-07-12) — GitHub Actions workflows added for CI (pytest on push/PR) and automated publish (tag push → npm with provenance)
 - Gemini legacy OAuth auto-refresh or graceful retirement (CLI retired 2026-06-18; expired token renders ⏰)
 
 ### Low Priority

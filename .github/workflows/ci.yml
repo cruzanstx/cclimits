@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+        # "requests" = install requests, run full suite (exercises requests path)
+        # "urllib"   = do NOT install requests, skip *WithRequests tests
+        #
+        # The urllib job is not redundant with the requests job: when requests
+        # is absent, HAS_REQUESTS is False at import time (lib/cclimits.py line 24),
+        # so http_get/http_post take the urllib branch for every call.  The
+        # *WithRequests test classes are skipped because they patch
+        # cclimits.requests and assert on the requests mock, which is
+        # meaningless when HAS_REQUESTS is False.  The *WithUrllib classes
+        # still run and verify urllib behavior in a genuine no-requests
+        # environment, and all other tests (credentials, output, CLI, etc.)
+        # mock at the http_get/http_post level so they work either way.
+        http-backend: ["requests", "urllib"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install pytest
+        run: pip install pytest
+      - name: Install requests (requests backend only)
+        if: matrix.http-backend == 'requests'
+        run: pip install requests
+      - name: Run tests (with requests)
+        if: matrix.http-backend == 'requests'
+        run: python3 -m pytest tests/ -v
+      - name: Run tests (urllib fallback, no requests installed)
+        if: matrix.http-backend == 'urllib'
+        run: python3 -m pytest tests/ -k "not WithRequests" -v
+
+  wrapper-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node wrapper smoke test
+        run: node bin/cclimits.js --help

@@ -1,5 +1,7 @@
 # cclimits
 
+[![CI](https://github.com/cruzanstx/cclimits/actions/workflows/ci.yml/badge.svg)](https://github.com/cruzanstx/cclimits/actions/workflows/ci.yml)
+
 Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI, OpenRouter, Kimi K2 (Moonshot AI), and Synthetic.new. It also supports checking keys used by **Aider** and **Continue**.
 
 ## Features
