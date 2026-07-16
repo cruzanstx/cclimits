@@ -1,5 +1,14 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-16: Codex Windows Classified by Duration, Not Slot Position
+
+- **Problem**: `get_codex_usage()` assumed `rate_limit.primary_window` = 5h and `secondary_window` = 7d by slot position. OpenAI does not guarantee that — weekly-only / reset accounts return a single window (often the **weekly** one) in the `primary_window` slot with `secondary_window: null` (see quotio#356, CodexBar). Result: `--oneline both` **dropped Codex entirely** (renderer required both slots filled) and the default view **mislabeled** the weekly number as `(5h)`.
+- **Fix (parsing)**: iterate both raw windows and bucket each by its own `limit_window_seconds` — `<=86400` (≤24h) → session/5h bucket (`result["primary_window"]`), anything longer → weekly/7d bucket (`result["secondary_window"]`). Reset formatting follows the bucket (h/m vs d/h). Slot order no longer matters.
+- **Fix (renderer)**: `_make_str_pct_renderer._r` now degrades gracefully — in `both` mode with only one window present it renders that single window; single-window modes fall back to the other window if the requested one is absent. A provider exposing only one window always shows up, correctly labeled `(5h)`/`(7d)`.
+- **Effect**: Codex Pro account currently returns weekly-only → now shows `Codex: 6% (7d) ✅` in default, `both`, and `7d` modes (was: dropped in `both`, mislabeled `6% (5h)` in default). Claude/Plus accounts with both windows still render dual `X%/Y%`.
+- **Tests**: 210 total (5 new) — `test_weekly_only_in_primary_slot`, `test_windows_classified_by_duration_not_slot` (test_usage.py); `TestOnelineSingleWindowDegradation` (3 cases, test_output.py)
+- **Files**: `lib/cclimits.py`, `tests/test_usage.py`, `tests/test_output.py`, `memory-bank/deltas.md`, `memory-bank/progress.md`
+
 ## 2026-07-12: Stale-Cache Fallback for Transient API Errors
 
 - When a live fetch fails with a transient error (connection error, HTTP 5xx, generic "API error" / "Could not fetch usage") but the cache holds a previous good entry for that provider, the stale entry is served with a visible age marker instead of ❌

@@ -483,41 +483,42 @@ def get_codex_usage() -> dict:
             if plan := data.get("plan_type"):
                 result["plan"] = plan
 
-            # Primary rate limit (5-hour window)
+            # Rate-limit windows. OpenAI does NOT guarantee primary=5h /
+            # secondary=7d by slot position — free/reset accounts return a
+            # single window, sometimes the weekly one in the primary slot
+            # (quotio#356). Classify each window by its own duration instead:
+            # <=24h -> session (5h) bucket, anything longer -> weekly (7d).
             if rate_limit := data.get("rate_limit", {}):
-                if primary := rate_limit.get("primary_window"):
-                    window_hours = primary.get("limit_window_seconds", 18000) // 3600
-                    result["primary_window"] = {
-                        "used": f"{primary.get('used_percent', 0)}%",
-                        "remaining": f"{100 - primary.get('used_percent', 0)}%",
-                        "window": f"{window_hours}h",
+                for raw in (rate_limit.get("primary_window"),
+                            rate_limit.get("secondary_window")):
+                    if not raw:
+                        continue
+                    win_secs = raw.get("limit_window_seconds", 0)
+                    used = raw.get("used_percent", 0)
+                    reset_secs = raw.get("reset_after_seconds", 0)
+                    resets_in = None
+                    if win_secs and win_secs <= 86400:
+                        key = "primary_window"
+                        window_label = f"{win_secs // 3600}h"
+                        if reset_secs > 0:
+                            hours, remainder = divmod(reset_secs, 3600)
+                            minutes = remainder // 60
+                            resets_in = f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
+                    else:
+                        key = "secondary_window"
+                        window_label = f"{win_secs // 86400}d" if win_secs else "7d"
+                        if reset_secs > 0:
+                            days, remainder = divmod(reset_secs, 86400)
+                            hours = remainder // 3600
+                            resets_in = f"{days}d {hours}h" if days > 0 else f"{hours}h"
+                    entry = {
+                        "used": f"{used}%",
+                        "remaining": f"{100 - used}%",
+                        "window": window_label,
                     }
-                    # Calculate reset time
-                    reset_secs = primary.get("reset_after_seconds", 0)
-                    if reset_secs > 0:
-                        hours, remainder = divmod(reset_secs, 3600)
-                        minutes = remainder // 60
-                        if hours > 0:
-                            result["primary_window"]["resets_in"] = f"{hours}h {minutes}m"
-                        else:
-                            result["primary_window"]["resets_in"] = f"{minutes}m"
-
-                # Secondary rate limit (7-day window)
-                if secondary := rate_limit.get("secondary_window"):
-                    window_days = secondary.get("limit_window_seconds", 604800) // 86400
-                    result["secondary_window"] = {
-                        "used": f"{secondary.get('used_percent', 0)}%",
-                        "remaining": f"{100 - secondary.get('used_percent', 0)}%",
-                        "window": f"{window_days}d",
-                    }
-                    reset_secs = secondary.get("reset_after_seconds", 0)
-                    if reset_secs > 0:
-                        days, remainder = divmod(reset_secs, 86400)
-                        hours = remainder // 3600
-                        if days > 0:
-                            result["secondary_window"]["resets_in"] = f"{days}d {hours}h"
-                        else:
-                            result["secondary_window"]["resets_in"] = f"{hours}h"
+                    if resets_in:
+                        entry["resets_in"] = resets_in
+                    result[key] = entry
 
                 # Limit status
                 if rate_limit.get("limit_reached"):
@@ -1701,14 +1702,18 @@ def _make_str_pct_renderer(label, ok_check, w5_key, w7d_key):
     def _r(data, window, use_color):
         if not ok_check(data):
             return None
-        if window == "both" and w5_key in data and w7d_key in data:
+        has5, has7 = w5_key in data, w7d_key in data
+        if window == "both" and has5 and has7:
             return _fmt_both(label, data[w5_key]["used"].rstrip("%"), data[w7d_key]["used"].rstrip("%"), use_color)
-        if window == "5h" and w5_key in data:
-            s = data[w5_key]["used"]
-            return _fmt_single(label, s, float(s.rstrip("%")), "(5h)", use_color)
-        if window == "7d" and w7d_key in data:
-            s = data[w7d_key]["used"]
-            return _fmt_single(label, s, float(s.rstrip("%")), "(7d)", use_color)
+        # Single-window (or degraded `both`): render whichever window exists,
+        # preferring the requested one but falling back so a provider that
+        # only exposes one window (e.g. Codex weekly-only) still shows up.
+        order = [w7d_key, w5_key] if window == "7d" else [w5_key, w7d_key]
+        for key in order:
+            if key in data:
+                s = data[key]["used"]
+                suffix = "(7d)" if key == w7d_key else "(5h)"
+                return _fmt_single(label, s, float(s.rstrip("%")), suffix, use_color)
         return None
     return _r
 

@@ -543,6 +543,31 @@ class TestPrintOnelineEdgeCases:
         assert "Claude: 45.5% (5h)" in captured.out
 
 
+class TestOnelineSingleWindowDegradation:
+    """A provider that exposes only one window still renders in every mode,
+    labeled by the window it actually has (Codex weekly-only case)."""
+
+    def test_both_mode_shows_lone_weekly_window(self, capsys):
+        results = {"codex": {"status": "ok", "secondary_window": {"used": "6%"}}}
+        print_oneline(results, "both")
+        captured = capsys.readouterr()
+        assert "Codex: 6% (7d)" in captured.out
+
+    def test_5h_mode_falls_back_to_weekly(self, capsys):
+        results = {"codex": {"status": "ok", "secondary_window": {"used": "6%"}}}
+        print_oneline(results, "5h")
+        captured = capsys.readouterr()
+        assert "Codex: 6% (7d)" in captured.out
+
+    def test_both_mode_still_dual_when_both_present(self, capsys):
+        results = {"codex": {"status": "ok",
+                             "primary_window": {"used": "35%"},
+                             "secondary_window": {"used": "68%"}}}
+        print_oneline(results, "both")
+        captured = capsys.readouterr()
+        assert "Codex: 35%/68%" in captured.out
+
+
 class TestOnelineMissingCredentials:
     """Missing credentials render 🔑 (config issue), not ❌ (outage)."""
 

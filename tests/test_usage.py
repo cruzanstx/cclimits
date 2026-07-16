@@ -147,6 +147,67 @@ class TestGetCodexUsage:
 
     @patch('cclimits.get_openai_credentials')
     @patch('cclimits.http_get')
+    def test_weekly_only_in_primary_slot(self, mock_get, mock_creds):
+        """Weekly-only accounts return the 7d window in the primary slot with
+        secondary null (quotio#356) — it must classify as the 7d bucket, not
+        be mislabeled 5h or dropped."""
+        mock_creds.return_value = {
+            "access_token": "test-oauth-token",
+            "account_id": "test-account-id"
+        }
+        mock_get.return_value = (200, {
+            "plan_type": "pro",
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 6,
+                    "limit_window_seconds": 604800,
+                    "reset_after_seconds": 555731
+                },
+                "secondary_window": None
+            }
+        })
+
+        result = get_codex_usage()
+
+        assert result["status"] == "ok"
+        assert "primary_window" not in result
+        assert result["secondary_window"]["used"] == "6%"
+        assert result["secondary_window"]["window"] == "7d"
+
+    @patch('cclimits.get_openai_credentials')
+    @patch('cclimits.http_get')
+    def test_windows_classified_by_duration_not_slot(self, mock_get, mock_creds):
+        """Even if the API swaps slot order, each window is bucketed by its own
+        limit_window_seconds (<=24h -> 5h, longer -> 7d)."""
+        mock_creds.return_value = {
+            "access_token": "test-oauth-token",
+            "account_id": "test-account-id"
+        }
+        mock_get.return_value = (200, {
+            "plan_type": "Plus",
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 68.5,
+                    "limit_window_seconds": 604800,
+                    "reset_after_seconds": 345600
+                },
+                "secondary_window": {
+                    "used_percent": 35.0,
+                    "limit_window_seconds": 18000,
+                    "reset_after_seconds": 7200
+                }
+            }
+        })
+
+        result = get_codex_usage()
+
+        assert result["primary_window"]["used"] == "35.0%"
+        assert result["primary_window"]["window"] == "5h"
+        assert result["secondary_window"]["used"] == "68.5%"
+        assert result["secondary_window"]["window"] == "7d"
+
+    @patch('cclimits.get_openai_credentials')
+    @patch('cclimits.http_get')
     def test_api_key_validation(self, mock_get, mock_creds):
         """Test Codex usage with API key (no OAuth)."""
         mock_creds.return_value = {
