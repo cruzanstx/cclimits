@@ -12,6 +12,7 @@
 - **Synthetic.new**: API token from env var (`$SYNTHETIC_API_KEY`), reports subscription/rolling-5h/weekly-credits buckets via `GET /v2/quotas` (free probe)
 - **Display modes**: JSON, detailed, compact one-liner, noemoji color mode; oneline distinguishes 🔑 no credentials / ⏰ expired token / ❌ real error
 - **Time windows**: 5h and 7d for Claude/Codex (Codex windows classified by `limit_window_seconds`, not slot position — weekly-only accounts return one window in the primary slot; renderer degrades gracefully to whichever window exists), 5h for Z.AI (shared across GLM models; `both` mode shows tokens%/requests%), 5h rolling + weekly credits for Synthetic.new
+- **Reset countdowns** (`--resets`, alias `--timeremaining`): appends `↻` countdowns per provider in oneline (6 of 8 providers; Antigravity shows earliest model reset via `summary.next_reset_in`; OpenRouter/Kimi are prepaid balances with nothing to reset)
 - **Caching** (`--cached`, `~/.cache/cclimits/usage.json`): atomic writes (temp + rename), merge on write (no-creds/partial runs preserve prior good entries), provider filters honored on cache hits (refetch if a requested provider is missing), output labeled with cache age
 - **BYOK Support**: Explicit documentation for monitoring Aider/Continue via their underlying provider keys.
 

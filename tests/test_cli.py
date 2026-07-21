@@ -216,6 +216,24 @@ class TestOnelineOutput:
         assert "Codex: 35.0% (5h)" in captured.out
 
     @patch('cclimits.get_claude_usage')
+    @patch('sys.argv', ['cclimits', '--claude', '--oneline', '--resets'])
+    def test_oneline_resets_flag(self, mock_claude, capsys):
+        """--resets appends reset countdowns to oneline output."""
+        mock_claude.return_value = {"status": "ok", "five_hour": {"used": "45.5%", "resets_in": "2h 15m"},
+                                    "seven_day": {"used": "72.3%", "resets_in": "4d 12h"}}
+        main()
+        assert "↻2h15m" in capsys.readouterr().out
+
+    @patch('cclimits.get_claude_usage')
+    @patch('sys.argv', ['cclimits', '--claude', '--oneline', '--timeremaining'])
+    def test_oneline_timeremaining_alias(self, mock_claude, capsys):
+        """--timeremaining is an alias for --resets."""
+        mock_claude.return_value = {"status": "ok", "five_hour": {"used": "45.5%", "resets_in": "2h 15m"},
+                                    "seven_day": {"used": "72.3%"}}
+        main()
+        assert "↻2h15m" in capsys.readouterr().out
+
+    @patch('cclimits.get_claude_usage')
     @patch('cclimits.get_codex_usage')
     @patch('sys.argv', ['cclimits', '--oneline', '5h'])
     def test_oneline_explicit_5h_window(self, mock_codex, mock_claude, capsys):

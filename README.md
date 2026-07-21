@@ -56,6 +56,7 @@ cclimits --oneline           # Compact one-liner (5h window)
 cclimits --oneline 7d        # Compact one-liner (7d window)
 cclimits --oneline both      # Compact one-liner (5h/7d combined)
 cclimits --oneline --noemoji # Color-coded text instead of emojis
+cclimits --oneline --resets  # Append reset countdowns (alias: --timeremaining)
 
 # Caching (for statusline integration)
 cclimits --oneline --cached        # Use cache if fresh (<60s)
@@ -75,6 +76,9 @@ Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1%/0% ✅ | OpenRouter: $47.91
 
 # No emoji mode (--noemoji) - colorizes percentages directly (green/yellow/red)
 Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91 | Antigravity: 35% (8 models)
+
+# With reset countdowns (--resets / --timeremaining) - ↻5h-reset/7d-reset; Antigravity shows its earliest model reset
+Claude: 4.0%/10.0% ✅ ↻2h15m/3d17h | Codex: 0%/2% ✅ ↻1h05m/6d23h | Z.AI: 1% (5h) ✅ ↻3h02m | Antigravity: 3% (20 models) ✅ ↻10m
 ```
 
 Status icons: ✅ ok · ⚠️ high usage · ❌ error · 🔑 no credentials found · ⏰ token expired. Cached results (`--cached`) are suffixed with their age, e.g. `(cached 42s)`.

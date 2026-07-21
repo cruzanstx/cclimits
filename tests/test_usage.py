@@ -13,6 +13,7 @@ from cclimits import (
     get_antigravity_credentials,
     get_antigravity_usage,
     _normalize_antigravity_models,
+    _earliest_antigravity_reset,
     get_zai_usage,
     GEMINI_TIERS
 )
@@ -355,8 +356,20 @@ class TestGetAntigravityUsage:
             "model_count": 2,
             "min_remaining_pct": 71,
             "avg_remaining_pct": 82,
+            "next_reset_in": "Now",  # mock resetTime is in the past
         }
         assert result["models"][0]["name"] == "claude-sonnet-4-6"
+
+    def test_earliest_reset_picks_soonest_and_skips_bad(self):
+        """_earliest_antigravity_reset returns the soonest ISO time, ignoring empty/garbage."""
+        earliest = _earliest_antigravity_reset([
+            {"reset_time": "2026-05-30T18:00:00Z"},
+            {"reset_time": "2026-05-30T17:00:00Z"},
+            {"reset_time": ""},
+            {"reset_time": "garbage"},
+        ])
+        assert earliest == "2026-05-30T17:00:00Z"
+        assert _earliest_antigravity_reset([{"reset_time": ""}]) is None
 
     @patch('cclimits.get_antigravity_credentials')
     def test_no_credentials(self, mock_creds):

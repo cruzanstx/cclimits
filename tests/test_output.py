@@ -589,6 +589,57 @@ class TestOnelineMissingCredentials:
         assert "ERR" not in captured.out
 
 
+class TestOnelineResets:
+    """--resets appends compact reset countdowns to oneline output."""
+
+    def test_default_omits_resets(self, capsys):
+        results = {"claude": {"status": "ok",
+                              "five_hour": {"used": "45.5%", "resets_in": "2h 15m"},
+                              "seven_day": {"used": "72.3%", "resets_in": "4d 12h"}}}
+        print_oneline(results, "5h")
+        assert "↻" not in capsys.readouterr().out
+
+    def test_single_window_reset(self, capsys):
+        results = {"claude": {"status": "ok",
+                              "five_hour": {"used": "45.5%", "resets_in": "2h 15m"},
+                              "seven_day": {"used": "72.3%", "resets_in": "4d 12h"}}}
+        print_oneline(results, "5h", show_resets=True)
+        assert "↻2h15m" in capsys.readouterr().out
+
+    def test_both_windows_reset(self, capsys):
+        results = {"claude": {"status": "ok",
+                              "five_hour": {"used": "45.5%", "resets_in": "2h 15m"},
+                              "seven_day": {"used": "72.3%", "resets_in": "4d 12h"}}}
+        print_oneline(results, "both", show_resets=True)
+        assert "↻2h15m/4d12h" in capsys.readouterr().out
+
+    def test_missing_or_na_reset_omitted(self, capsys):
+        results = {"claude": {"status": "ok",
+                              "five_hour": {"used": "45.5%", "resets_in": "N/A"}},
+                   "zai": {"status": "ok", "token_quota": {"percentage": 30.0}}}
+        print_oneline(results, "5h", show_resets=True)
+        assert "↻" not in capsys.readouterr().out
+
+    def test_antigravity_earliest_reset(self, capsys):
+        results = {"antigravity": {"status": "ok",
+                                   "summary": {"min_remaining_pct": 97, "model_count": 20,
+                                               "next_reset_in": "1h 30m"}}}
+        print_oneline(results, "5h", show_resets=True)
+        assert "Antigravity: 3% (20 models) ✅ ↻1h30m" in capsys.readouterr().out
+
+    def test_zai_and_synthetic_resets(self, capsys):
+        results = {
+            "zai": {"status": "ok", "token_quota": {"percentage": 30.0, "resets_in": "1h 5m"}},
+            "synthetic": {"status": "ok",
+                          "rolling_5h": {"percentage": 10, "next_tick_in": "45m"},
+                          "weekly_credits": {"percent_used": 20, "next_regen_in": "3d 2h"}},
+        }
+        print_oneline(results, "both", show_resets=True)
+        out = capsys.readouterr().out
+        assert "Z.AI" in out and "↻1h5m" in out
+        assert "Synthetic" in out and "↻45m/3d2h" in out
+
+
 class TestOnelineCacheAge:
     """Cached oneline output is labeled with its age."""
 

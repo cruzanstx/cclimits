@@ -1,5 +1,15 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-07-21: --resets Flag Adds Reset Countdowns to Oneline (v1.4.0)
+
+- **Feature**: new `--resets` flag (alias `--timeremaining`) appends a compact `↻` reset countdown to each provider in `--oneline` output, e.g. `Claude: 4.0%/19.0% ✅ ↻2h15m/3d17h` (`both` mode shows `5h-reset/7d-reset`). Off by default — without the flag, output is byte-identical to before.
+- **Coverage**: Claude + Codex (per-window `resets_in`), Z.AI (`token_quota.resets_in`), Synthetic (`rolling_5h.next_tick_in` / `weekly_credits.next_regen_in`), Gemini (per-tier `resets_in`), Antigravity (earliest reset across models — see below). OpenRouter/Kimi are prepaid balances with nothing to reset — unchanged.
+- **Antigravity earliest reset**: new `_earliest_antigravity_reset(models)` picks the soonest parseable `resetTime` ISO string across models (skips empty/garbage); stored as `summary.next_reset_in` so it flows into JSON, the oneline `↻` suffix, and a new `Next reset:` line in the detailed view.
+- **Bonus fix**: `format_reset_time` never rolled hours into days — Claude's weekly reset rendered as `89h 13m`; now `3d 17h` everywhere (detailed + oneline).
+- **Plumbing**: all `render_oneline` renderers take a 4th `show_resets=False` param; shared `_reset_suffix(*resets)` helper compacts strings (`"2h 15m"` → `↻2h15m`, filters `N/A`/missing); `print_oneline` gained `show_resets` kwarg.
+- **Tests**: 219 total (9 new) — `TestOnelineResets` (6 cases incl. Antigravity, test_output.py), CLI flag + alias (test_cli.py), `_earliest_antigravity_reset` + summary equality update (test_usage.py).
+- **Files**: `lib/cclimits.py`, `tests/test_output.py`, `tests/test_cli.py`, `tests/test_usage.py`, `README.md`, `memory-bank/deltas.md`, `memory-bank/progress.md`
+
 ## 2026-07-16: Codex Windows Classified by Duration, Not Slot Position
 
 - **Problem**: `get_codex_usage()` assumed `rate_limit.primary_window` = 5h and `secondary_window` = 7d by slot position. OpenAI does not guarantee that — weekly-only / reset accounts return a single window (often the **weekly** one) in the `primary_window` slot with `secondary_window: null` (see quotio#356, CodexBar). Result: `--oneline both` **dropped Codex entirely** (renderer required both slots filled) and the default view **mislabeled** the weekly number as `(5h)`.

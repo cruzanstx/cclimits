@@ -330,9 +330,12 @@ def format_reset_time(iso_time: str | None) -> str:
         if delta.total_seconds() < 0:
             return "Now"
 
-        hours, remainder = divmod(int(delta.total_seconds()), 3600)
+        days, remainder = divmod(int(delta.total_seconds()), 86400)
+        hours, remainder = divmod(remainder, 3600)
         minutes = remainder // 60
 
+        if days > 0:
+            return f"{days}d {hours}h"
         if hours > 0:
             return f"{hours}h {minutes}m"
         return f"{minutes}m"
@@ -1201,6 +1204,20 @@ def _normalize_antigravity_models(data: dict) -> list[dict]:
     return sorted(models, key=lambda item: (item["remaining_pct"], item["name"]))
 
 
+def _earliest_antigravity_reset(models: list[dict]) -> str | None:
+    """Earliest parseable reset_time ISO string across models (next bucket to refill)."""
+    parsed = []
+    for m in models:
+        ts = m.get("reset_time")
+        if not ts:
+            continue
+        try:
+            parsed.append((datetime.fromisoformat(ts.replace('Z', '+00:00')), ts))
+        except ValueError:
+            continue
+    return min(parsed, key=lambda p: p[0])[1] if parsed else None
+
+
 def get_antigravity_usage() -> dict:
     """Fetch Antigravity per-model quota via Cloud Code Assist."""
     creds = get_antigravity_credentials()
@@ -1268,6 +1285,8 @@ def get_antigravity_usage() -> dict:
             "min_remaining_pct": min(remaining_values) if remaining_values else 0,
             "avg_remaining_pct": int(round(sum(remaining_values) / len(remaining_values))) if remaining_values else 0,
         }
+        if earliest := _earliest_antigravity_reset(models):
+            summary["next_reset_in"] = format_reset_time(earliest)
         result = {
             "status": "ok",
             "project_id": project_id,
@@ -1504,6 +1523,8 @@ def print_section(name: str, data: dict):
         print(f"    Models:    {summary.get('model_count', 0)}")
         print(f"    Tightest:  {summary.get('min_remaining_pct', 0)}% remaining")
         print(f"    Average:   {summary.get('avg_remaining_pct', 0)}% remaining")
+        if "next_reset_in" in summary:
+            print(f"    Next reset: {summary['next_reset_in']}")
         print(f"\n    {'Model':<32} {'Remaining':>10}  Reset")
         print(f"    {'-'*32} {'-'*10}  {'-'*16}")
         sorted_models = sorted(data["models"], key=lambda item: (item.get("remaining_pct", 0), item.get("name", "")))
@@ -1670,6 +1691,12 @@ def get_status_icon(pct: float) -> str:
 
 # Shared oneline formatting helpers
 
+def _reset_suffix(*resets):
+    """Compact '↻a/b' suffix from reset strings; None if nothing usable."""
+    vals = [r.replace(" ", "") for r in resets if r and r != "N/A"]
+    return f"↻{'/'.join(vals)}" if vals else None
+
+
 def _fmt_both(label, s5, s7, use_color):
     """Dual-window: 'Label: X%/Y% <icon>'"""
     m = max(float(s5), float(s7))
@@ -1699,12 +1726,15 @@ def _fmt_balance(label, balance_str, balance, use_color):
 
 def _make_str_pct_renderer(label, ok_check, w5_key, w7d_key):
     """Factory for Claude/Codex-style percent-dual renderers (string percents)."""
-    def _r(data, window, use_color):
+    def _r(data, window, use_color, show_resets=False):
         if not ok_check(data):
             return None
         has5, has7 = w5_key in data, w7d_key in data
         if window == "both" and has5 and has7:
-            return _fmt_both(label, data[w5_key]["used"].rstrip("%"), data[w7d_key]["used"].rstrip("%"), use_color)
+            s = _fmt_both(label, data[w5_key]["used"].rstrip("%"), data[w7d_key]["used"].rstrip("%"), use_color)
+            if show_resets and (suf := _reset_suffix(data[w5_key].get("resets_in"), data[w7d_key].get("resets_in"))):
+                s += f" {suf}"
+            return s
         # Single-window (or degraded `both`): render whichever window exists,
         # preferring the requested one but falling back so a provider that
         # only exposes one window (e.g. Codex weekly-only) still shows up.
@@ -1713,14 +1743,17 @@ def _make_str_pct_renderer(label, ok_check, w5_key, w7d_key):
             if key in data:
                 s = data[key]["used"]
                 suffix = "(7d)" if key == w7d_key else "(5h)"
-                return _fmt_single(label, s, float(s.rstrip("%")), suffix, use_color)
+                out = _fmt_single(label, s, float(s.rstrip("%")), suffix, use_color)
+                if show_resets and (suf := _reset_suffix(data[key].get("resets_in"))):
+                    out += f" {suf}"
+                return out
         return None
     return _r
 
 
 def _make_balance_renderer(label, ok_key, get_balance):
     """Factory for OpenRouter/Kimi-style balance renderers."""
-    def _r(data, window, use_color):
+    def _r(data, window, use_color, show_resets=False):
         if not (data.get("status") == "ok" and ok_key in data):
             return None
         bal, s = get_balance(data)
@@ -1728,31 +1761,41 @@ def _make_balance_renderer(label, ok_key, get_balance):
     return _r
 
 
-def _render_zai(data, window, use_color):
+def _render_zai(data, window, use_color, show_resets=False):
     if not (data.get("status") == "ok" and "token_quota" in data):
         return None
     pct = data["token_quota"].get("percentage", 0)
     rq = data.get("request_quota", {})
     if window == "both" and rq.get("limit"):
-        return _fmt_both("Z.AI", str(pct), str(round(rq.get("used", 0) / rq["limit"] * 100)), use_color)
-    return _fmt_single("Z.AI", f"{pct}% (5h)", pct, "", use_color)
+        s = _fmt_both("Z.AI", str(pct), str(round(rq.get("used", 0) / rq["limit"] * 100)), use_color)
+    else:
+        s = _fmt_single("Z.AI", f"{pct}% (5h)", pct, "", use_color)
+    if show_resets and (suf := _reset_suffix(data["token_quota"].get("resets_in"))):
+        s += f" {suf}"
+    return s
 
 
-def _render_synthetic(data, window, use_color):
+def _render_synthetic(data, window, use_color, show_resets=False):
     if data.get("status") != "ok":
         return None
     p5 = data.get("rolling_5h", {}).get("percentage")
     p7 = data.get("weekly_credits", {}).get("percent_used")
+    r5 = data.get("rolling_5h", {}).get("next_tick_in")
+    r7 = data.get("weekly_credits", {}).get("next_regen_in")
     if window == "both" and p5 is not None and p7 is not None:
-        return _fmt_both("Synthetic", str(p5), str(p7), use_color)
-    if window == "7d" and p7 is not None:
-        return _fmt_single("Synthetic", f"{p7}% (7d)", float(p7), "", use_color)
-    if p5 is not None:
-        return _fmt_single("Synthetic", f"{p5}% (5h)", float(p5), "", use_color)
-    return None
+        s, resets = _fmt_both("Synthetic", str(p5), str(p7), use_color), (r5, r7)
+    elif window == "7d" and p7 is not None:
+        s, resets = _fmt_single("Synthetic", f"{p7}% (7d)", float(p7), "", use_color), (r7,)
+    elif p5 is not None:
+        s, resets = _fmt_single("Synthetic", f"{p5}% (5h)", float(p5), "", use_color), (r5,)
+    else:
+        return None
+    if show_resets and (suf := _reset_suffix(*resets)):
+        s += f" {suf}"
+    return s
 
 
-def _render_gemini(data, window, use_color):
+def _render_gemini(data, window, use_color, show_resets=False):
     if not (data.get("status") == "ok" and "models" in data):
         return None
     parts = []
@@ -1761,20 +1804,27 @@ def _render_gemini(data, window, use_color):
             if mid in data["models"]:
                 s = data["models"][mid]["used"]
                 p = float(s.rstrip("%"))
-                parts.append(f"{tier} {colorize_pct(s, p)}" if use_color else f"{tier} {s} {get_status_icon(p)}")
+                part = f"{tier} {colorize_pct(s, p)}" if use_color else f"{tier} {s} {get_status_icon(p)}"
+                if show_resets and (suf := _reset_suffix(data["models"][mid].get("resets_in"))):
+                    part += f" {suf}"
+                parts.append(part)
                 break
     return f"Gemini: ( {' | '.join(parts)} )" if parts else None
 
 
-def _render_antigravity(data, window, use_color):
+def _render_antigravity(data, window, use_color, show_resets=False):
     if not (data.get("status") == "ok" and "summary" in data):
         return None
     s = data["summary"]
     used = max(0, 100 - int(s.get("min_remaining_pct", 0)))
     mc = int(s.get("model_count", 0))
     if use_color:
-        return f"Antigravity: {colorize_pct(f'{used}%', used)} ({mc} models)"
-    return f"Antigravity: {used}% ({mc} models) {get_status_icon(used)}"
+        out = f"Antigravity: {colorize_pct(f'{used}%', used)} ({mc} models)"
+    else:
+        out = f"Antigravity: {used}% ({mc} models) {get_status_icon(used)}"
+    if show_resets and (suf := _reset_suffix(s.get("next_reset_in"))):
+        out += f" {suf}"
+    return out
 
 
 # Provider registry — single source of truth.  Adding a provider: one entry
@@ -1816,7 +1866,8 @@ PROVIDERS = [
 ]
 
 
-def print_oneline(results: dict, window: str = "5h", use_color: bool = False, cache_age: int | None = None):
+def print_oneline(results: dict, window: str = "5h", use_color: bool = False, cache_age: int | None = None,
+                  show_resets: bool = False):
     """Print compact one-liner output"""
     if window not in ("5h", "7d", "both"):
         window = "5h"
@@ -1839,7 +1890,7 @@ def print_oneline(results: dict, window: str = "5h", use_color: bool = False, ca
         if key not in results:
             continue
         data = results[key]
-        rendered = p["render_oneline"](data, window, use_color)
+        rendered = p["render_oneline"](data, window, use_color, show_resets)
         if rendered is not None:
             if "stale_fallback" in data:
                 age = data.get("stale_age_seconds", 0)
@@ -1891,6 +1942,7 @@ Examples:
   cclimits --oneline      # Compact one-liner (5h window)
   cclimits --oneline 7d   # Compact one-liner (7d window)
   cclimits --oneline both # Compact one-liner (5h/7d window)
+  cclimits --oneline both --resets  # One-liner with reset countdowns (↻3h24m/4d12h)
 
 Example Output:
   # One-liner (5h window)
@@ -1907,6 +1959,8 @@ Example Output:
                         help="Compact one-liner output (5h, 7d, or both; default: 5h)")
     parser.add_argument("--noemoji", action="store_true",
                         help="Use colored text instead of emojis (for terminals without emoji support)")
+    parser.add_argument("--resets", "--timeremaining", action="store_true", dest="resets",
+                        help="Append reset countdowns (↻2h15m) to --oneline output")
     for _p in PROVIDERS:
         parser.add_argument(f"--{_p['key']}", action="store_true", help=_p["arg_help"])
     parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
@@ -1997,7 +2051,7 @@ Example Output:
         print(json.dumps(results, indent=2))
     elif args.oneline:
         window = args.oneline if args.oneline in ("5h", "7d", "both") else "5h"
-        print_oneline(results, window, use_color=args.noemoji, cache_age=cache_age)
+        print_oneline(results, window, use_color=args.noemoji, cache_age=cache_age, show_resets=args.resets)
     else:
         print("\n🔍 AI CLI Usage Checker")
         cached_note = f"  (cached {format_cache_age(cache_age)} ago)" if cache_age is not None else ""
