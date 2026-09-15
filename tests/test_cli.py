@@ -80,6 +80,28 @@ class TestCLIArgumentParsing:
         mock_gemini.assert_not_called()
         mock_zai.assert_not_called()
 
+    @patch('cclimits.write_cache')
+    @patch('cclimits.get_codex_usage')
+    @patch('sys.argv', ['cclimits', '--codex', '--json', '--no-cache-write', '--no-stale-fallback'])
+    def test_codex_cacheless_json_does_not_write_cache(self, mock_codex, mock_write_cache, capsys):
+        """Embedding mode can observe Codex quota without mutating cclimits cache."""
+        mock_codex.return_value = {
+            "status": "ok",
+            "source": "chatgpt_wham_fallback",
+            "primary_window": {
+                "used": "35%",
+                "remaining": "65%",
+                "window": "5h",
+                "resets_at": "2026-08-30T16:00:00Z",
+            },
+        }
+
+        main()
+
+        output = json.loads(capsys.readouterr().out)
+        assert output["codex"]["source"] == "chatgpt_wham_fallback"
+        mock_write_cache.assert_not_called()
+
     @patch('cclimits.get_claude_usage')
     @patch('cclimits.get_codex_usage')
     @patch('cclimits.get_gemini_usage')

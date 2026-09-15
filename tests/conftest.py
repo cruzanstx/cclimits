@@ -24,6 +24,15 @@ def isolated_cache(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_ambient_native_codex(monkeypatch):
+    """Keep existing Codex HTTP-fallback tests deterministic on developer
+    machines that happen to have the Codex CLI installed and authenticated.
+    Native app-server behavior has dedicated tests that override this stub.
+    """
+    monkeypatch.setattr(cclimits, "get_native_codex_usage", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def no_ambient_copilot_creds(monkeypatch):
     """GITHUB_TOKEN is commonly exported (and gh CLI config commonly present),
     which would make every check-all test hit the live Copilot endpoint.

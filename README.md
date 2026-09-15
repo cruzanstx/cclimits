@@ -9,6 +9,7 @@ Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gem
 - **Auto-discovers credentials** from standard locations
 - **Zero-config Claude quota** — reads Claude Code's own local usage cache (`~/.claude.json`), no login required; also discovers Claude Desktop OAuth on Windows
 - **Auto-refreshes expired tokens** (Gemini OAuth, Antigravity OAuth)
+- **Native Codex quota discovery** via the installed app-server (read-only, with WHAM fallback)
 - **Multiple output formats**: detailed, JSON, compact one-liner
 - **Caching support** for fast statusline integration
 - **Cross-platform**: macOS and Linux support
@@ -248,7 +249,7 @@ Credentials are auto-discovered from these locations:
 | Tool | Location |
 |------|----------|
 | **Claude** | `~/.claude/.credentials.json` (Linux), macOS Keychain, or Claude Desktop OAuth (Windows, read-only). Zero-config fallback: `~/.claude.json` cached usage (fresh snapshots only, no auth needed) |
-| **Codex** | `~/.codex/auth.json` |
+| **Codex** | Installed `codex app-server --stdio` (preferred, read-only); `~/.codex/auth.json` is used only by the legacy fallback |
 | **Gemini** | `~/.gemini/oauth_creds.json` (auto-refreshes) |
 | **Z.AI** | `$ZAI_KEY` or `$ZAI_API_KEY` environment variable |
 | **OpenRouter** | `$OPENROUTER_API_KEY` environment variable |
@@ -297,6 +298,7 @@ export GEMINI_OAUTH_CLIENT_SECRET="..."
 
 **Note on Integrated Providers:**
 - **GitHub Copilot**: Supported via the undocumented `copilot_internal/user` endpoint that the Copilot editor plugins themselves use (there is still no supported public API). Any GitHub token for an account with a Copilot subscription works — editor sign-in files, gh CLI, or a plain `GITHUB_TOKEN`. A token whose account has *no* Copilot subscription is hidden from check-all output (visible with `--copilot` or `--json`). The check consumes no premium requests.
+- **Codex**: Prefers the installed `codex app-server --stdio` `account/rateLimits/read` RPC and falls back to the legacy WHAM endpoint only when native quota is unavailable. Use `--no-cache-write` for a pure observer invocation.
 - **Cursor / Windsurf**: Not supported yet as they do not provide public quota APIs.
 
 ## Requirements

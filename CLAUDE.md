@@ -108,7 +108,7 @@ There are two paths:
 | Tool | Endpoint | Auth Header |
 |------|----------|-------------|
 | Claude | `api.anthropic.com/api/oauth/usage` | `Bearer {token}` |
-| Codex | `chatgpt.com/backend-api/wham/usage` | `Bearer {oauth}` + `chatgpt-account-id` |
+| Codex | `codex app-server --stdio` → `account/rateLimits/read` (preferred); `chatgpt.com/backend-api/wham/usage` fallback | Native app-server; fallback uses `Bearer {oauth}` + `chatgpt-account-id` |
 | Gemini | `cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` | `Bearer {oauth}` |
 | Antigravity | `cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` | `Bearer {oauth}` |
 | Antigravity | `cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels` | `Bearer {oauth}` |

@@ -28,6 +28,8 @@ import urllib.request
 import urllib.error
 import urllib.parse
 
+from codex_native import get_native_codex_usage
+
 
 
 
@@ -934,10 +936,26 @@ def get_openai_credentials() -> dict:
 
 
 def get_codex_usage() -> dict:
-    """Fetch Codex usage via ChatGPT backend API"""
+    """Fetch Codex quota, preferring the native read-only app-server RPC.
+
+    The direct ChatGPT usage endpoint remains a compatibility fallback for
+    machines where Codex is absent, too old, or its app-server surface fails.
+    """
+    native = get_native_codex_usage()
+    if isinstance(native, dict) and native.get("status") == "ok":
+        return native
+
+    native_error = native if isinstance(native, dict) else None
     creds = get_openai_credentials()
 
     if not creds.get("access_token") and not creds.get("api_key"):
+        if native_error:
+            return {
+                "error": native_error.get("error", "Codex native quota unavailable"),
+                "details": "Codex app-server did not return a usable quota snapshot",
+                "hint": "Codex was detected but its native rate-limit snapshot was unavailable and no fallback credentials were found",
+                "native_source": "codex_app_server",
+            }
         return {"error": "No credentials found", "hint": "Run 'codex login' or set OPENAI_API_KEY"}
 
     result = {}
@@ -956,6 +974,11 @@ def get_codex_usage() -> dict:
         if status == 200 and isinstance(data, dict):
             result["status"] = "ok"
             result["auth"] = "OAuth (ChatGPT)"
+            result["source"] = "chatgpt_wham_fallback"
+            if native_error:
+                # The reason is useful provenance; low-level details may contain
+                # local executable/profile paths and are not needed on success.
+                result["native_fallback_reason"] = native_error.get("error")
 
             # Plan type
             if plan := data.get("plan_type"):
@@ -974,6 +997,7 @@ def get_codex_usage() -> dict:
                     win_secs = raw.get("limit_window_seconds", 0)
                     used = raw.get("used_percent", 0)
                     reset_secs = raw.get("reset_after_seconds", 0)
+                    reset_at = raw.get("reset_at")
                     resets_in = None
                     if win_secs and win_secs <= 86400:
                         key = "primary_window"
@@ -993,7 +1017,16 @@ def get_codex_usage() -> dict:
                         "used": f"{used}%",
                         "remaining": f"{100 - used}%",
                         "window": window_label,
+                        "window_duration_minutes": (
+                            win_secs // 60 if isinstance(win_secs, (int, float)) and win_secs > 0 else None
+                        ),
                     }
+                    if isinstance(reset_at, (int, float)) and reset_at > 0:
+                        entry["resets_at"] = (
+                            datetime.fromtimestamp(reset_at, tz=timezone.utc)
+                            .isoformat()
+                            .replace("+00:00", "Z")
+                        )
                     if resets_in:
                         entry["resets_in"] = resets_in
                     result[key] = entry
@@ -1024,7 +1057,10 @@ def get_codex_usage() -> dict:
         status, data = http_get("https://api.openai.com/v1/models", headers)
         if status == 200:
             result["auth"] = result.get("auth", "API Key")
+            result["source"] = "openai_api_key_fallback"
             result["api_key_valid"] = True
+            if native_error:
+                result["native_fallback_reason"] = native_error.get("error")
             result["note"] = "API key valid but no subscription quota API"
             result["hint"] = "Check usage at https://platform.openai.com/usage"
             return result
@@ -2092,6 +2128,8 @@ def print_section(name: str, data: dict):
     # Show auth info first if available
     if "auth" in data:
         print(f"  🔑 Auth: {data['auth']}")
+    if data.get("source") == "codex_app_server":
+        print("  📍 Source: Codex native app-server RPC (read-only)")
     if "account" in data:
         print(f"  👤 Account: {data['account']}")
     if "api_key_valid" in data:
@@ -2173,6 +2211,9 @@ def print_section(name: str, data: dict):
 
     if "limit_reached" in data:
         print(f"  ⚠️  Rate limit reached!")
+
+    if "reset_credits_available" in data:
+        print(f"  ♻️  Reset credits available: {data['reset_credits_available']} (read-only)")
 
     # OpenAI rate limits (legacy/API key mode)
     if "rate_limits" in data:
