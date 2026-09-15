@@ -1,5 +1,14 @@
 # Recent Deltas (Last 3-5 Changes)
 
+## 2026-09-03: Zero-Config Claude Quota Discovery (PR #3, external contributor giuliastro)
+
+- **Feature**: Claude quota now works with zero setup — when no OAuth token is found, `get_claude_usage()` falls back to reading Claude Code's own cached usage snapshot from `~/.claude.json` (`cachedUsageUtilization`, written by Claude Code itself). Read-only, never refreshes or exposes credentials. Only snapshots younger than `CLAUDE_LOCAL_USAGE_STALE_SECONDS` (30 min) are accepted; undated/stale snapshots are never presented as live.
+- **Windows**: also discovers Claude Desktop OAuth (standard + MSIX profiles) — borrowed read-only, never mutated/refreshed (token-safety buffer 120s).
+- **New flag**: `--no-cache-write` — pure observer mode; fetches but never writes `~/.cache/cclimits` (for read-only embeddings like Token Harness).
+- **JSON**: preserves raw Claude reset timestamps; output is identity-free (no account UUID leakage).
+- **Docs**: README gained Features/Credential-Locations coverage + both new flags (commit 3cf330f); npm description/keywords updated to all 9 providers.
+- **Tests**: 261 → 274 (13 new; zero-config cache, Desktop discovery, observer mode, stale/undated rejection).
+
 ## 2026-08-05: GitHub Copilot Integration
 
 - **Feature**: new `copilot` provider — monthly premium-request quota via the undocumented `GET api.github.com/copilot_internal/user` endpoint (what the Copilot editor plugins read; the check consumes no premium requests). Jan-2026 research rated Copilot "Low feasibility" — that flipped: the endpoint accepts plain PATs (live-verified with a `public_repo`-scope classic PAT) and is relied on by community tools (openusage, opencode-copilot-usage).

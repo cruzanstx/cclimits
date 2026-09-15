@@ -7,6 +7,7 @@ Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gem
 ## Features
 
 - **Auto-discovers credentials** from standard locations
+- **Zero-config Claude quota** — reads Claude Code's own local usage cache (`~/.claude.json`), no login required; also discovers Claude Desktop OAuth on Windows
 - **Auto-refreshes expired tokens** (Gemini OAuth, Antigravity OAuth)
 - **Native Codex quota discovery** via the installed app-server (read-only, with WHAM fallback)
 - **Multiple output formats**: detailed, JSON, compact one-liner
@@ -63,6 +64,8 @@ cclimits --oneline --resets  # Append reset countdowns (alias: --timeremaining)
 # Caching (for statusline integration)
 cclimits --oneline --cached        # Use cache if fresh (<60s)
 cclimits --oneline --cache-ttl 30  # Custom TTL in seconds
+cclimits --no-stale-fallback      # Don't serve stale cache on API errors
+cclimits --no-cache-write         # Read-only observer mode (never writes the cache)
 ```
 
 ## Example Output
@@ -245,7 +248,7 @@ Credentials are auto-discovered from these locations:
 
 | Tool | Location |
 |------|----------|
-| **Claude** | `~/.claude/.credentials.json` (Linux) or macOS Keychain |
+| **Claude** | `~/.claude/.credentials.json` (Linux), macOS Keychain, or Claude Desktop OAuth (Windows, read-only). Zero-config fallback: `~/.claude.json` cached usage (fresh snapshots only, no auth needed) |
 | **Codex** | Installed `codex app-server --stdio` (preferred, read-only); `~/.codex/auth.json` is used only by the legacy fallback |
 | **Gemini** | `~/.gemini/oauth_creds.json` (auto-refreshes) |
 | **Z.AI** | `$ZAI_KEY` or `$ZAI_API_KEY` environment variable |

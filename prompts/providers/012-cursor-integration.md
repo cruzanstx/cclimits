@@ -5,8 +5,16 @@ Cursor is rapidly growing in popularity and has a clear "500 fast requests/month
 </objective>
 
 <context>
-Project: cclimits - CLI tool for checking AI coding assistant quotas
+Project: cclimits — CLI tool for checking AI coding assistant quotas
 File: `lib/cclimits.py`
+
+**Architecture note (2026-09 refresh):** providers are now data-driven via the module-level
+`PROVIDERS` registry in `lib/cclimits.py` (see registry around line 2563). Adding a provider =
+(1) `get_<name>_credentials()` + `get_<name>_usage()` functions, (2) ONE registry entry with
+`key`, `title`, `fetch`, `gated`, `creds`, `oneline_order`, `render_oneline`. Argparse flags,
+fetch dispatch, and oneline/verbose/JSON output are all derived from the registry — do NOT
+hand-wire flags or print blocks. GitHub Copilot (`get_copilot_usage` / `_render_copilot`) is the
+freshest pattern reference. Also read `./CLAUDE.md` and `./memory-bank/systemPatterns.md` first.
 
 Research findings (from `research/ai-coding-providers.md`):
 - Plans: Hobby (free), Pro ($20/mo), Business ($40/mo)
@@ -29,7 +37,7 @@ Before implementing, investigate:
 <requirements>
 1. Add `get_cursor_credentials()` function to discover Cursor auth
 2. Add `get_cursor_usage()` function to fetch usage stats
-3. Add `--cursor` CLI flag to filter output
+3. Add ONE `PROVIDERS` registry entry for cursor (`gated: True`, shared percent renderer) — the `--cursor` flag, dispatch, and oneline/verbose/JSON output derive from it automatically
 4. Display fast/slow request counts and remaining quota
 5. Show when quota resets (monthly)
 </requirements>
@@ -54,6 +62,10 @@ Likely credential locations:
 - `~/.cursor/`
 - `~/Library/Application Support/Cursor/` (macOS)
 - `~/.config/Cursor/` (Linux)
+**Registry-era notes (2026-09):**
+- Do NOT hand-edit argparse, main() dispatch, or print_oneline() — one `PROVIDERS` entry covers all of them.
+- Use the `http_get()` helper for HTTP calls — no direct `requests` usage; keep the zero-dependency urllib fallback.
+- Add tests under `tests/` following the existing provider test files; run `python3 -m pytest tests/` before declaring done.
 </implementation>
 
 <output>
