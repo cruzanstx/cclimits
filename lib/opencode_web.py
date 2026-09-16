@@ -33,6 +33,7 @@ OPENCODE_SERVER_URL = "https://opencode.ai/_server"
 OPENCODE_WORKSPACES_SERVER_ID = "def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f"
 OPENCODE_BILLING_SERVER_ID = "c83b78a614689c38ebee981f9b39a8b377716db85c1fd7dbab604adc02d3313d"
 OPENCODE_COOKIE_NAMES = ("__Host-auth", "auth")
+OPENCODE_COOKIE_HOSTS = ("opencode.ai", ".opencode.ai")
 CHROMIUM_EPOCH_OFFSET_SECONDS = 11644473600
 ZEN_USD_SCALE = 100_000_000.0
 _USER_AGENT = (
@@ -421,6 +422,22 @@ def _chromium_expired(expires_utc: object) -> bool:
     return unix <= time.time()
 
 
+def _allowed_cookie_host(host: object, name: object) -> bool:
+    """Accept only cookies that can belong to the opencode.ai site.
+
+    ``__Host-`` cookies are host-only by definition and therefore must not be
+    read from a domain cookie row such as ``.opencode.ai``. The legacy
+    ``auth`` cookie may be host-only or scoped to the exact parent domain, but
+    never to a lookalike or arbitrary subdomain.
+    """
+    if not isinstance(host, str) or not isinstance(name, str):
+        return False
+    normalized_host = host.casefold()
+    if name == "__Host-auth":
+        return normalized_host == "opencode.ai"
+    return normalized_host in OPENCODE_COOKIE_HOSTS
+
+
 def _read_chromium_session(spec: _ChromiumSpec, path: Path) -> dict | None:
     try:
         with _SQLiteSnapshot(path) as conn:
@@ -429,16 +446,16 @@ def _read_chromium_session(spec: _ChromiumSpec, path: Path) -> dict | None:
                 """
                 SELECT host_key, name, value, encrypted_value, expires_utc
                 FROM cookies
-                WHERE host_key LIKE ? AND name IN (?, ?)
+                WHERE host_key IN (?, ?) AND name IN (?, ?)
                 ORDER BY last_access_utc DESC
                 """,
-                ("%opencode.ai", OPENCODE_COOKIE_NAMES[0], OPENCODE_COOKIE_NAMES[1]),
+                (*OPENCODE_COOKIE_HOSTS, *OPENCODE_COOKIE_NAMES),
             ).fetchall()
     except (OSError, sqlite3.Error, PermissionError):
         return None
 
     for host, name, value, encrypted_value, expires_utc in rows:
-        if not isinstance(name, str) or name not in OPENCODE_COOKIE_NAMES:
+        if not _allowed_cookie_host(host, name):
             continue
         if _chromium_expired(expires_utc):
             continue
@@ -465,16 +482,18 @@ def _read_firefox_session(path: Path) -> dict | None:
                 """
                 SELECT host, name, value, expiry
                 FROM moz_cookies
-                WHERE host LIKE ? AND name IN (?, ?)
+                WHERE host IN (?, ?) AND name IN (?, ?)
                 ORDER BY lastAccessed DESC
                 """,
-                ("%opencode.ai", OPENCODE_COOKIE_NAMES[0], OPENCODE_COOKIE_NAMES[1]),
+                (*OPENCODE_COOKIE_HOSTS, *OPENCODE_COOKIE_NAMES),
             ).fetchall()
     except (OSError, sqlite3.Error, PermissionError):
         return None
 
     now = time.time()
-    for _host, name, value, expiry in rows:
+    for host, name, value, expiry in rows:
+        if not _allowed_cookie_host(host, name):
+            continue
         try:
             expired = float(expiry) > 0 and float(expiry) <= now
         except (TypeError, ValueError):

@@ -47,6 +47,7 @@ cclimits              # Check all tools (detailed)
 cclimits --claude     # Claude only
 cclimits --codex      # Codex only
 cclimits --opencode-zen # OpenCode Zen only
+cclimits --opencode-zen --opencode-zen-browser # Include opt-in browser billing
 cclimits --gemini     # Gemini only
 cclimits --zai        # Z.AI only
 cclimits --openrouter # OpenRouter only
@@ -274,9 +275,10 @@ export SYNTHETIC_API_KEY=your-key   # Add to ~/.zshrc or ~/.bashrc
 
 OpenCode Zen validation uses only the usage endpoint and does not perform
 inference. Its API-key balance is not exposed by that endpoint. On Linux,
-cclimits may additionally reuse an already authenticated `opencode.ai`
-browser session read-only for billing; it never starts login or changes browser
-profiles. Browser billing discovery is not available on macOS or Windows.
+cclimits can optionally reuse an already authenticated `opencode.ai` browser
+session read-only for billing with `--opencode-zen-browser`; it never starts
+login or changes browser profiles. This opt-in browser discovery is available
+only on Linux and is disabled by default.
 
 ### Antigravity Authentication
 
@@ -303,7 +305,7 @@ export GEMINI_OAUTH_CLIENT_SECRET="..."
 
 **Note on Integrated Providers:**
 - **GitHub Copilot**: Supported via the undocumented `copilot_internal/user` endpoint that the Copilot editor plugins themselves use (there is still no supported public API). Any GitHub token for an account with a Copilot subscription works — editor sign-in files, gh CLI, or a plain `GITHUB_TOKEN`. A token whose account has *no* Copilot subscription is hidden from check-all output (visible with `--copilot` or `--json`). The check consumes no premium requests.
-- **OpenCode Zen**: Existing keys are discovered from OpenCode, Pi, and OMP without changing their files; the same key across harnesses is shown as one identity. Browser billing discovery is Linux-only and requires an already authenticated browser session that cclimits can read without modifying the profile.
+- **OpenCode Zen**: Existing keys are discovered from OpenCode, Pi, and OMP without changing their files; the same key across harnesses is shown as one identity. Browser billing discovery is opt-in via `--opencode-zen-browser`, Linux-only, and requires an already authenticated browser session that cclimits can read without modifying the profile.
 - **Cursor / Windsurf**: Not supported yet as they do not provide public quota APIs.
 
 ## Requirements

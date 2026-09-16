@@ -256,8 +256,12 @@ def _opencode_zen_key_status(key: str) -> tuple[str, int, object]:
     return "unknown", status, data
 
 
-def get_opencode_zen_usage() -> dict:
-    """Discover and validate OpenCode Zen without requiring cclimits setup."""
+def get_opencode_zen_usage(*, allow_browser_billing: bool = False) -> dict:
+    """Discover and validate OpenCode Zen without requiring cclimits setup.
+
+    Browser-session billing is deliberately opt-in because it may inspect
+    browser cookie databases and the desktop keyring.
+    """
     identities = discover_opencode_zen_credentials()
     if not identities:
         return {
@@ -297,25 +301,26 @@ def get_opencode_zen_usage() -> dict:
                 "dashboard_url": "https://opencode.ai",
             }
 
-            # Optional zero-config billing overlay. This reuses only an already
-            # authenticated browser session and never initiates login or writes
-            # to browser state. Raw cookies never enter the returned payload.
-            billing = discover_opencode_zen_billing(http_get)
-            if billing:
-                result.update({
-                    "balance_status": "ok",
-                    "balance_usd": billing.get("balance_usd"),
-                    "monthly_usage_usd": billing.get("monthly_usage_usd"),
-                    "billing_source": "opencode_web_session",
-                    "browser": billing.get("browser"),
-                    "browser_source": billing.get("browser_source"),
-                    "workspace_count": billing.get("workspace_count"),
-                })
-                if billing.get("monthly_limit_usd") is not None:
-                    result["monthly_limit_usd"] = billing["monthly_limit_usd"]
-                if billing.get("usage_updated_at") is not None:
-                    result["usage_updated_at"] = billing["usage_updated_at"]
-                result.pop("balance_note", None)
+            if allow_browser_billing:
+                # This reuses only an already authenticated browser session and
+                # never initiates login or writes to browser state. Raw cookies
+                # never enter the returned payload.
+                billing = discover_opencode_zen_billing(http_get)
+                if billing:
+                    result.update({
+                        "balance_status": "ok",
+                        "balance_usd": billing.get("balance_usd"),
+                        "monthly_usage_usd": billing.get("monthly_usage_usd"),
+                        "billing_source": "opencode_web_session",
+                        "browser": billing.get("browser"),
+                        "browser_source": billing.get("browser_source"),
+                        "workspace_count": billing.get("workspace_count"),
+                    })
+                    if billing.get("monthly_limit_usd") is not None:
+                        result["monthly_limit_usd"] = billing["monthly_limit_usd"]
+                    if billing.get("usage_updated_at") is not None:
+                        result["usage_updated_at"] = billing["usage_updated_at"]
+                    result.pop("balance_note", None)
 
             return result
 
@@ -2729,7 +2734,8 @@ PROVIDERS = [
      "gated": False, "creds": None, "oneline_order": 1,
      "render_oneline": _make_str_pct_renderer("Codex", lambda d: d.get("status") == "ok", "primary_window", "secondary_window")},
     {"key": "opencode_zen", "cli": "opencode-zen", "title": "OpenCode Zen", "oneline_label": "OpenCode Zen",
-     "arg_help": "Only check OpenCode Zen (browser billing auto-discovery on Linux)", "fetch": "get_opencode_zen_usage",
+     "arg_help": "Only check OpenCode Zen", "fetch": "get_opencode_zen_usage",
+     "fetch_option": ("allow_browser_billing", "opencode_zen_browser"),
      "gated": True, "creds": "get_opencode_zen_credentials", "oneline_order": 2,
      "render_oneline": _render_opencode_zen},
     {"key": "gemini", "title": "Gemini CLI", "oneline_label": "Gemini",
@@ -2823,7 +2829,7 @@ Credential Locations (auto-discovered):
   Synthetic  $SYNTHETIC_API_KEY environment variable
   Copilot    ~/.config/github-copilot/apps.json, gh CLI hosts.yml, or $GITHUB_TOKEN
   OpenCode Zen OpenCode auth.json, Pi auth.json, OMP agent.db, or $OPENCODE_API_KEY
-               Browser billing auto-discovery: Linux only
+               Browser billing: opt-in with --opencode-zen-browser (Linux only)
 
 Setup (one-time):
   claude           # Login to Claude Code
@@ -2872,6 +2878,12 @@ Example Output:
             action="store_true",
             help=_p["arg_help"],
         )
+    parser.add_argument(
+        "--opencode-zen-browser",
+        dest="opencode_zen_browser",
+        action="store_true",
+        help="Opt in to read-only opencode.ai browser-session billing (Linux only)",
+    )
     parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
     parser.add_argument("--cache-ttl", type=int, metavar="SECONDS",
                         help="Override default TTL (default: 60, implies --cached)")
@@ -2915,15 +2927,22 @@ Example Output:
         # rather than the sum.
         work: list[tuple[str, Callable[[], dict]]] = []
 
+        def provider_fetch(provider: dict) -> Callable[[], dict]:
+            fetch = globals()[provider["fetch"]]
+            if option := provider.get("fetch_option"):
+                keyword, argument = option
+                return lambda: fetch(**{keyword: getattr(args, argument)})
+            return fetch
+
         for p in PROVIDERS:
             pkey = p["key"]
             if p["gated"]:
                 cred_fn = globals()[p["creds"]]
                 if getattr(args, pkey) or (check_all and cred_fn()):
-                    work.append((pkey, globals()[p["fetch"]]))
+                    work.append((pkey, provider_fetch(p)))
             else:
                 if check_all or getattr(args, pkey):
-                    work.append((pkey, globals()[p["fetch"]]))
+                    work.append((pkey, provider_fetch(p)))
 
         if work:
             with ThreadPoolExecutor(max_workers=len(work)) as executor:

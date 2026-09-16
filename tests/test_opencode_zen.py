@@ -160,6 +160,38 @@ def test_valid_zen_key_without_go_is_authenticated():
     assert http_get.call_args.args[1]["Authorization"] == "Bearer existing-key"
 
 
+def test_browser_billing_is_not_inspected_by_default():
+    identities = [{
+        "key": "existing-key",
+        "fingerprint": "abc123",
+        "harnesses": ["pi"],
+        "sources": ["auth.json"],
+    }]
+    with patch("cclimits.discover_opencode_zen_credentials", return_value=identities), \
+         patch("cclimits.http_get", return_value=(403, "Forbidden")), \
+         patch("cclimits.discover_opencode_zen_billing") as discover_billing:
+        result = cclimits.get_opencode_zen_usage()
+
+    assert result["balance_status"] == "unavailable_by_api"
+    discover_billing.assert_not_called()
+
+
+def test_opencode_zen_cli_does_not_opt_into_browser_billing():
+    with patch("cclimits.get_opencode_zen_usage", return_value={"status": "authenticated"}) as fetch, \
+         patch("sys.argv", ["cclimits", "--opencode-zen", "--json"]):
+        cclimits.main()
+
+    fetch.assert_called_once_with(allow_browser_billing=False)
+
+
+def test_opencode_zen_browser_flag_opts_in_explicitly():
+    with patch("cclimits.get_opencode_zen_usage", return_value={"status": "authenticated"}) as fetch, \
+         patch("sys.argv", ["cclimits", "--opencode-zen", "--opencode-zen-browser", "--json"]):
+        cclimits.main()
+
+    fetch.assert_called_once_with(allow_browser_billing=True)
+
+
 def test_rejected_key_reports_invalid_auth():
     identities = [{
         "key": "bad-key",

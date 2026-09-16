@@ -5,6 +5,7 @@ import sqlite3
 import time
 from unittest.mock import patch
 
+import pytest
 import cclimits
 import opencode_web
 
@@ -61,7 +62,7 @@ def test_reads_firefox_opencode_auth_cookie_read_only(tmp_path):
     conn.execute(
         "INSERT INTO moz_cookies(host, name, value, expiry, lastAccessed) VALUES (?, ?, ?, ?, ?)",
         (
-            ".opencode.ai",
+            "opencode.ai",
             "__Host-auth",
             "secret-web-session",
             int(time.time()) + 3600,
@@ -79,6 +80,63 @@ def test_reads_firefox_opencode_auth_cookie_read_only(tmp_path):
     assert session["cookie_header"] == "__Host-auth=secret-web-session"
     assert session["browser"] == "firefox"
     assert before == after
+
+
+@pytest.mark.parametrize("host", [".evilopencode.ai", ".sub.opencode.ai"])
+def test_rejects_firefox_lookalike_and_subdomain_cookies(tmp_path, host):
+    db = tmp_path / "cookies.sqlite"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        """
+        CREATE TABLE moz_cookies (
+            id INTEGER PRIMARY KEY,
+            host TEXT,
+            name TEXT,
+            value TEXT,
+            expiry INTEGER,
+            lastAccessed INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO moz_cookies(host, name, value, expiry, lastAccessed) VALUES (?, ?, ?, ?, ?)",
+        (host, "auth", "unrelated-secret", int(time.time()) + 3600, 123),
+    )
+    conn.commit()
+    conn.close()
+
+    assert opencode_web._read_firefox_session(db) is None
+
+
+def test_firefox_allows_domain_auth_but_not_host_cookie_on_domain(tmp_path):
+    db = tmp_path / "cookies.sqlite"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        """
+        CREATE TABLE moz_cookies (
+            id INTEGER PRIMARY KEY,
+            host TEXT,
+            name TEXT,
+            value TEXT,
+            expiry INTEGER,
+            lastAccessed INTEGER
+        )
+        """
+    )
+    conn.executemany(
+        "INSERT INTO moz_cookies(host, name, value, expiry, lastAccessed) VALUES (?, ?, ?, ?, ?)",
+        [
+            (".opencode.ai", "__Host-auth", "invalid-host-cookie", int(time.time()) + 3600, 200),
+            (".opencode.ai", "auth", "valid-domain-cookie", int(time.time()) + 3600, 100),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    session = opencode_web._read_firefox_session(db)
+
+    assert session is not None
+    assert session["cookie_header"] == "auth=valid-domain-cookie"
 
 
 def test_reads_plaintext_chromium_cookie_without_crypto(tmp_path):
@@ -111,6 +169,34 @@ def test_reads_plaintext_chromium_cookie_without_crypto(tmp_path):
     assert session is not None
     assert session["cookie_header"] == "auth=plain-session"
     assert session["browser"] == "chrome"
+
+
+def test_rejects_chromium_lookalike_cookie(tmp_path):
+    db = tmp_path / "Cookies"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
+    conn.execute("INSERT INTO meta(key, value) VALUES ('version', '23')")
+    conn.execute(
+        """
+        CREATE TABLE cookies (
+            host_key TEXT,
+            name TEXT,
+            value TEXT,
+            encrypted_value BLOB,
+            expires_utc INTEGER,
+            last_access_utc INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO cookies VALUES (?, ?, ?, ?, ?, ?)",
+        (".evilopencode.ai", "auth", "unrelated-secret", b"", 0, 100),
+    )
+    conn.commit()
+    conn.close()
+
+    spec = opencode_web._ChromiumSpec("chrome", "chrome", ())
+    assert opencode_web._read_chromium_session(spec, db) is None
 
 
 def test_fetch_billing_from_existing_session_never_returns_cookie():
@@ -165,7 +251,7 @@ def test_zen_usage_overlays_authoritative_web_billing():
     with patch("cclimits.discover_opencode_zen_credentials", return_value=identities), \
          patch("cclimits._opencode_zen_key_status", return_value=("valid_no_go", 403, {})), \
          patch("cclimits.discover_opencode_zen_billing", return_value=billing):
-        result = cclimits.get_opencode_zen_usage()
+        result = cclimits.get_opencode_zen_usage(allow_browser_billing=True)
 
     assert result["status"] == "authenticated"
     assert result["balance_status"] == "ok"
@@ -183,7 +269,7 @@ def test_zen_usage_overlays_authoritative_web_billing():
     assert "/home/test" not in json.dumps(result)
 
 
-def test_zen_usage_keeps_api_only_result_when_no_web_session():
+def test_zen_usage_does_not_inspect_browser_by_default():
     identities = [{
         "key": "existing-key",
         "fingerprint": "api-fingerprint",
@@ -193,12 +279,13 @@ def test_zen_usage_keeps_api_only_result_when_no_web_session():
 
     with patch("cclimits.discover_opencode_zen_credentials", return_value=identities), \
          patch("cclimits._opencode_zen_key_status", return_value=("valid_no_go", 403, {})), \
-         patch("cclimits.discover_opencode_zen_billing", return_value=None):
+         patch("cclimits.discover_opencode_zen_billing") as discover_billing:
         result = cclimits.get_opencode_zen_usage()
 
     assert result["status"] == "authenticated"
     assert result["balance_status"] == "unavailable_by_api"
     assert "balance_usd" not in result
+    discover_billing.assert_not_called()
 
 
 def test_non_linux_billing_guidance_is_accurate():
