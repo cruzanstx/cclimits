@@ -4,7 +4,7 @@ Project instructions for Claude Code when working in this repository.
 
 ## Quick Orientation
 
-**cclimits** is a CLI tool that checks quota/usage for AI coding assistants (Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI, Kimi/Moonshot, OpenRouter, Synthetic.new, GitHub Copilot). Distributed via npm, runs Python under the hood.
+**cclimits** is a CLI tool that checks quota/usage for AI coding assistants (Claude Code, OpenAI Codex, OpenCode Zen, Google Gemini CLI, Google Antigravity, Z.AI, Kimi/Moonshot, OpenRouter, Synthetic.new, GitHub Copilot). Distributed via npm, runs Python under the hood.
 
 **Repository**: https://github.com/cruzanstx/cclimits
 **npm**: https://www.npmjs.com/package/cclimits
@@ -109,6 +109,7 @@ There are two paths:
 |------|----------|-------------|
 | Claude | `api.anthropic.com/api/oauth/usage` | `Bearer {token}` |
 | Codex | `codex app-server --stdio` → `account/rateLimits/read` (preferred); `chatgpt.com/backend-api/wham/usage` fallback | Native app-server; fallback uses `Bearer {oauth}` + `chatgpt-account-id` |
+| OpenCode Zen | `opencode.ai/zen/go/v1/usage` | `Bearer {api_key}` |
 | Gemini | `cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` | `Bearer {oauth}` |
 | Antigravity | `cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` | `Bearer {oauth}` |
 | Antigravity | `cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels` | `Bearer {oauth}` |

@@ -22,7 +22,7 @@ class TestCLIArgumentParsing:
         # Help should exit with code 0
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "Claude, Codex, Gemini, Z.AI" in captured.out
+        assert "Claude, Codex, OpenCode Zen, Gemini, Z.AI" in captured.out
 
     @patch('cclimits.get_claude_usage')
     @patch('cclimits.get_codex_usage')

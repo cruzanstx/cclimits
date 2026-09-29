@@ -24,6 +24,18 @@ def isolated_cache(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_ambient_opencode_zen_creds(monkeypatch):
+    """Prevent generic check-all tests from using a developer's real Zen key."""
+    monkeypatch.setattr(cclimits, "get_opencode_zen_credentials", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def no_ambient_opencode_zen_web(monkeypatch):
+    """Never inspect a developer's real browser session during unit tests."""
+    monkeypatch.setattr(cclimits, "discover_opencode_zen_billing", lambda _http_get: None)
+
+
+@pytest.fixture(autouse=True)
 def no_ambient_native_codex(monkeypatch):
     """Keep existing Codex HTTP-fallback tests deterministic on developer
     machines that happen to have the Codex CLI installed and authenticated.

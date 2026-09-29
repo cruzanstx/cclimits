@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/cruzanstx/cclimits/actions/workflows/ci.yml/badge.svg)](https://github.com/cruzanstx/cclimits/actions/workflows/ci.yml)
 
-Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gemini CLI, Google Antigravity, Z.AI, OpenRouter, Kimi K2 (Moonshot AI), Synthetic.new, and GitHub Copilot. It also supports checking keys used by **Aider** and **Continue**.
+Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, OpenCode Zen, Google Gemini CLI, Google Antigravity, Z.AI, OpenRouter, Kimi K2 (Moonshot AI), Synthetic.new, and GitHub Copilot. It also supports checking keys used by **Aider** and **Continue**.
 
 ## Features
 
@@ -10,6 +10,7 @@ Check quota/usage for AI coding CLI tools: Claude Code, OpenAI Codex, Google Gem
 - **Zero-config Claude quota** — reads Claude Code's own local usage cache (`~/.claude.json`), no login required; also discovers Claude Desktop OAuth on Windows
 - **Auto-refreshes expired tokens** (Gemini OAuth, Antigravity OAuth)
 - **Native Codex quota discovery** via the installed app-server (read-only, with WHAM fallback)
+- **Zero-config OpenCode Zen** discovery across OpenCode, Pi, and OMP
 - **Multiple output formats**: detailed, JSON, compact one-liner
 - **Caching support** for fast statusline integration
 - **Cross-platform**: macOS and Linux support
@@ -47,6 +48,8 @@ chmod +x ~/.local/bin/cclimits
 cclimits              # Check all tools (detailed)
 cclimits --claude     # Claude only
 cclimits --codex      # Codex only
+cclimits --opencode-zen # OpenCode Zen only
+cclimits --opencode-zen --opencode-zen-browser # Include opt-in browser billing
 cclimits --gemini     # Gemini only
 cclimits --zai        # Z.AI only
 cclimits --openrouter # OpenRouter only
@@ -250,6 +253,7 @@ Credentials are auto-discovered from these locations:
 |------|----------|
 | **Claude** | `~/.claude/.credentials.json` (Linux), macOS Keychain, or Claude Desktop OAuth (Windows, read-only). Zero-config fallback: `~/.claude.json` cached usage (fresh snapshots only, no auth needed) |
 | **Codex** | Installed `codex app-server --stdio` (preferred, read-only); `~/.codex/auth.json` is used only by the legacy fallback |
+| **OpenCode Zen** | OpenCode `auth.json`, Pi `auth.json`, OMP `agent.db` / `.env`, or `$OPENCODE_API_KEY` (read-only) |
 | **Gemini** | `~/.gemini/oauth_creds.json` (auto-refreshes) |
 | **Z.AI** | `$ZAI_KEY` or `$ZAI_API_KEY` environment variable |
 | **OpenRouter** | `$OPENROUTER_API_KEY` environment variable |
@@ -272,6 +276,13 @@ export OPENROUTER_API_KEY=your-key  # Add to ~/.zshrc or ~/.bashrc
 export MOONSHOT_API_KEY=your-key    # Add to ~/.zshrc or ~/.bashrc
 export SYNTHETIC_API_KEY=your-key   # Add to ~/.zshrc or ~/.bashrc
 ```
+
+OpenCode Zen validation uses only the usage endpoint and does not perform
+inference. Its API-key balance is not exposed by that endpoint. On Linux,
+cclimits can optionally reuse an already authenticated `opencode.ai` browser
+session read-only for billing with `--opencode-zen-browser`; it never starts
+login or changes browser profiles. This opt-in browser discovery is available
+only on Linux and is disabled by default.
 
 ### Antigravity Authentication
 
@@ -299,6 +310,7 @@ export GEMINI_OAUTH_CLIENT_SECRET="..."
 **Note on Integrated Providers:**
 - **GitHub Copilot**: Supported via the undocumented `copilot_internal/user` endpoint that the Copilot editor plugins themselves use (there is still no supported public API). Any GitHub token for an account with a Copilot subscription works — editor sign-in files, gh CLI, or a plain `GITHUB_TOKEN`. A token whose account has *no* Copilot subscription is hidden from check-all output (visible with `--copilot` or `--json`). The check consumes no premium requests.
 - **Codex**: Prefers the installed `codex app-server --stdio` `account/rateLimits/read` RPC and falls back to the legacy WHAM endpoint only when native quota is unavailable. Use `--no-cache-write` for a pure observer invocation.
+- **OpenCode Zen**: Existing keys are discovered from OpenCode, Pi, and OMP without changing their files; the same key across harnesses is shown as one identity. Browser billing discovery is opt-in via `--opencode-zen-browser`, Linux-only, and requires an already authenticated browser session that cclimits can read without modifying the profile.
 - **Cursor / Windsurf**: Not supported yet as they do not provide public quota APIs.
 
 ## Requirements

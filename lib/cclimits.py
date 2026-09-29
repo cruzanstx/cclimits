@@ -28,6 +28,8 @@ import urllib.request
 import urllib.error
 import urllib.parse
 
+from opencode_zen import discover_credentials as discover_opencode_zen_credentials
+from opencode_web import discover_billing as discover_opencode_zen_billing
 from codex_native import get_native_codex_usage
 
 
@@ -217,6 +219,133 @@ def apply_stale_fallback(results: dict, cached_data: dict, cached_age: int,
                 stale["stale_fallback"] = True
                 updated[key] = stale
     return updated
+
+
+
+### OpenCode Zen Functions
+
+OPENCODE_ZEN_GO_USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
+
+
+def get_opencode_zen_credentials() -> list[dict] | None:
+    """Return already-configured Zen billing identities from OpenCode, Pi, or OMP."""
+    credentials = discover_opencode_zen_credentials()
+    return credentials or None
+
+
+def _opencode_zen_key_status(key: str) -> tuple[str, int, object]:
+    """Validate a Zen key without spending inference tokens.
+
+    The OpenCode Go usage endpoint authenticates the same workspace API keys
+    before it checks Go entitlement. A 403 therefore confirms a valid Zen key
+    with no Go subscription, while 401 means the key itself was rejected.
+    """
+    status, data = http_get(
+        OPENCODE_ZEN_GO_USAGE_URL,
+        {
+            "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+            "User-Agent": "cclimits",
+        },
+    )
+    if status == 200:
+        return "valid", status, data
+    if status == 403:
+        return "valid_no_go", status, data
+    if status == 401:
+        return "invalid", status, data
+    return "unknown", status, data
+
+
+def get_opencode_zen_usage(*, allow_browser_billing: bool = False) -> dict:
+    """Discover and validate OpenCode Zen without requiring cclimits setup.
+
+    Browser-session billing is deliberately opt-in because it may inspect
+    browser cookie databases and the desktop keyring.
+    """
+    identities = discover_opencode_zen_credentials()
+    if not identities:
+        return {
+            "error": NO_CREDS_ERROR,
+            "hint": "No existing OpenCode Zen credential found in OpenCode, Pi, OMP, or OPENCODE_API_KEY",
+        }
+
+    checks: list[dict] = []
+    for identity in identities:
+        state, status, _response = _opencode_zen_key_status(identity["key"])
+        public = {
+            "harnesses": identity["harnesses"],
+            "sources": identity["sources"],
+            "validation": state,
+            "http_status": status,
+        }
+        checks.append(public)
+
+        if state in ("valid", "valid_no_go"):
+            result = {
+                "status": "authenticated",
+                "provider": "opencode-zen",
+                "plan": "OpenCode Zen (pay as you go)",
+                "auth": ", ".join(identity["harnesses"]),
+                "auth_sources": identity["sources"],
+                "api_key_valid": True,
+                "balance_status": "unavailable_by_api",
+                "balance_note": (
+                    "OpenCode does not currently expose the Zen wallet balance "
+                    "to API-key callers. "
+                    + (
+                        "An existing authenticated opencode.ai browser session can be reused read-only."
+                        if sys.platform.startswith("linux")
+                        else "Automatic browser-session billing discovery is currently Linux-only."
+                    )
+                ),
+                "dashboard_url": "https://opencode.ai",
+            }
+
+            if allow_browser_billing:
+                # This reuses only an already authenticated browser session and
+                # never initiates login or writes to browser state. Raw cookies
+                # never enter the returned payload.
+                billing = discover_opencode_zen_billing(http_get)
+                if billing:
+                    result.update({
+                        "balance_status": "ok",
+                        "balance_usd": billing.get("balance_usd"),
+                        "monthly_usage_usd": billing.get("monthly_usage_usd"),
+                        "billing_source": "opencode_web_session",
+                        "browser": billing.get("browser"),
+                        "browser_source": billing.get("browser_source"),
+                        "workspace_count": billing.get("workspace_count"),
+                    })
+                    if billing.get("monthly_limit_usd") is not None:
+                        result["monthly_limit_usd"] = billing["monthly_limit_usd"]
+                    if billing.get("usage_updated_at") is not None:
+                        result["usage_updated_at"] = billing["usage_updated_at"]
+                    result.pop("balance_note", None)
+
+            return result
+
+    if all(item["validation"] == "invalid" for item in checks):
+        return {
+            "error": "Invalid API key",
+            "hint": "OpenCode Zen credentials were discovered locally but all were rejected",
+            "identities": checks,
+        }
+
+    return {
+        "status": "detected",
+        "provider": "opencode-zen",
+        "plan": "OpenCode Zen (pay as you go)",
+        "auth": ", ".join(sorted({h for item in identities for h in item["harnesses"]})),
+        "auth_sources": list(dict.fromkeys(s for item in identities for s in item["sources"])),
+        "balance_status": "unavailable_by_api",
+        "balance_note": (
+            "Zen credentials were found, but could not be validated without "
+            "inference. OpenCode exposes no API-key balance endpoint."
+        ),
+        "identities": checks,
+    }
+
 
 
 ### OpenRouter Functions
@@ -2135,11 +2264,22 @@ def print_section(name: str, data: dict):
     if "api_key_valid" in data:
         print(f"  🔑 API Key: valid")
 
+    if "auth_sources" in data:
+        print("  📍 Sources:")
+        for source in data["auth_sources"]:
+            print(f"    - {source}")
     # Show status
     if data.get("status") == "ok":
         print("  ✅ Connected")
     elif data.get("status") == "authenticated":
         print("  ✅ Authenticated")
+    elif data.get("status") == "detected":
+        print("  🔎 Detected")
+
+    if data.get("balance_status") == "unavailable_by_api":
+        print("\n  💰 Zen balance: unavailable via API key")
+        if note := data.get("balance_note"):
+            print(f"    {note}")
 
     # Stale-cache fallback notice
     if "stale_fallback" in data:
@@ -2365,8 +2505,23 @@ def print_section(name: str, data: dict):
         if data.get("unlimited_buckets"):
             print(f"    ({', '.join(data['unlimited_buckets'])}: unlimited)")
 
+    # OpenCode Zen pay-as-you-go wallet.
+    if data.get("provider") == "opencode-zen" and data.get("balance_status") == "ok":
+        balance = data.get("balance_usd")
+        monthly_usage = data.get("monthly_usage_usd")
+        monthly_limit = data.get("monthly_limit_usd")
+        print(f"\n  Zen Wallet:")
+        if balance is not None:
+            print(f"    Balance:      ${balance:.2f}")
+        if monthly_usage is not None:
+            print(f"    This month:   ${monthly_usage:.2f}")
+        if monthly_limit is not None:
+            print(f"    Monthly limit: ${monthly_limit:.2f}")
+        if data.get("browser"):
+            print(f"    Web session:  {data['browser']} (read-only)")
+
     # OpenRouter-specific
-    if "balance_usd" in data:
+    if "balance_usd" in data and data.get("provider") != "opencode-zen":
         balance = data["balance_usd"]
         total_credits = data.get("total_credits_usd", 0)
         total_usage = data.get("total_usage_usd", 0)
@@ -2585,6 +2740,14 @@ def _render_antigravity(data, window, use_color, show_resets=False):
     return out
 
 
+def _render_opencode_zen(data, window, use_color, show_resets=False):
+    if data.get("status") not in ("authenticated", "detected"):
+        return None
+    if "balance_usd" in data:
+        return _fmt_balance("OpenCode Zen", f"$" + f"{data['balance_usd']:.2f}", float(data["balance_usd"]), use_color)
+    return "OpenCode Zen: balance N/A"
+
+
 def _render_copilot(data, window, use_color, show_resets=False):
     if data.get("status") != "ok" or "premium_requests" not in data:
         return None
@@ -2610,13 +2773,18 @@ PROVIDERS = [
      "arg_help": "Only check Codex", "fetch": "get_codex_usage",
      "gated": False, "creds": None, "oneline_order": 1,
      "render_oneline": _make_str_pct_renderer("Codex", lambda d: d.get("status") == "ok", "primary_window", "secondary_window")},
+    {"key": "opencode_zen", "cli": "opencode-zen", "title": "OpenCode Zen", "oneline_label": "OpenCode Zen",
+     "arg_help": "Only check OpenCode Zen", "fetch": "get_opencode_zen_usage",
+     "fetch_option": ("allow_browser_billing", "opencode_zen_browser"),
+     "gated": True, "creds": "get_opencode_zen_credentials", "oneline_order": 2,
+     "render_oneline": _render_opencode_zen},
     {"key": "gemini", "title": "Gemini CLI", "oneline_label": "Gemini",
      "arg_help": "Only check Gemini", "fetch": "get_gemini_usage",
      "gated": False, "creds": None, "oneline_order": 4,
      "render_oneline": _render_gemini},
     {"key": "zai", "title": "Z.AI (5h shared - GLM-4.x)", "oneline_label": "Z.AI",
      "arg_help": "Only check Z.AI", "fetch": "get_zai_usage",
-     "gated": False, "creds": None, "oneline_order": 2,
+     "gated": False, "creds": None, "oneline_order": 3,
      "render_oneline": _render_zai},
     {"key": "openrouter", "title": "OpenRouter", "oneline_label": "OpenRouter",
      "arg_help": "Only check OpenRouter", "fetch": "get_openrouter_usage",
@@ -2700,6 +2868,8 @@ Credential Locations (auto-discovered):
   Antigravity system keyring, or $ANTIGRAVITY_REFRESH_TOKEN
   Synthetic  $SYNTHETIC_API_KEY environment variable
   Copilot    ~/.config/github-copilot/apps.json, gh CLI hosts.yml, or $GITHUB_TOKEN
+  OpenCode Zen OpenCode auth.json, Pi auth.json, OMP agent.db, or $OPENCODE_API_KEY
+               Browser billing: opt-in with --opencode-zen-browser (Linux only)
 
 Setup (one-time):
   claude           # Login to Claude Code
@@ -2717,6 +2887,7 @@ Examples:
   cclimits --antigravity # Antigravity only
   cclimits --synthetic  # Synthetic.new only
   cclimits --copilot    # GitHub Copilot only
+  cclimits --opencode-zen # OpenCode Zen only
   cclimits --json       # JSON output
   cclimits --oneline      # Compact one-liner (5h window)
   cclimits --oneline 7d   # Compact one-liner (7d window)
@@ -2729,7 +2900,7 @@ Example Output:
 """
 
     parser = argparse.ArgumentParser(
-        description="Check AI CLI usage/quota for Claude, Codex, Gemini, Z.AI, OpenRouter, Kimi, Antigravity, Synthetic.new, GitHub Copilot",
+        description="Check AI CLI usage/quota for Claude, Codex, OpenCode Zen, Gemini, Z.AI, OpenRouter, Kimi, Antigravity, Synthetic.new, GitHub Copilot",
         epilog=epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -2741,7 +2912,18 @@ Example Output:
     parser.add_argument("--resets", "--timeremaining", action="store_true", dest="resets",
                         help="Append reset countdowns (↻2h15m) to --oneline output")
     for _p in PROVIDERS:
-        parser.add_argument(f"--{_p['key']}", action="store_true", help=_p["arg_help"])
+        parser.add_argument(
+            f"--{_p.get('cli', _p['key'])}",
+            dest=_p["key"],
+            action="store_true",
+            help=_p["arg_help"],
+        )
+    parser.add_argument(
+        "--opencode-zen-browser",
+        dest="opencode_zen_browser",
+        action="store_true",
+        help="Opt in to read-only opencode.ai browser-session billing (Linux only)",
+    )
     parser.add_argument("--cached", action="store_true", help="Use cached data if fresh (< TTL), fetch if stale")
     parser.add_argument("--cache-ttl", type=int, metavar="SECONDS",
                         help="Override default TTL (default: 60, implies --cached)")
@@ -2785,15 +2967,22 @@ Example Output:
         # rather than the sum.
         work: list[tuple[str, Callable[[], dict]]] = []
 
+        def provider_fetch(provider: dict) -> Callable[[], dict]:
+            fetch = globals()[provider["fetch"]]
+            if option := provider.get("fetch_option"):
+                keyword, argument = option
+                return lambda: fetch(**{keyword: getattr(args, argument)})
+            return fetch
+
         for p in PROVIDERS:
             pkey = p["key"]
             if p["gated"]:
                 cred_fn = globals()[p["creds"]]
                 if getattr(args, pkey) or (check_all and cred_fn()):
-                    work.append((pkey, globals()[p["fetch"]]))
+                    work.append((pkey, provider_fetch(p)))
             else:
                 if check_all or getattr(args, pkey):
-                    work.append((pkey, globals()[p["fetch"]]))
+                    work.append((pkey, provider_fetch(p)))
 
         if work:
             with ThreadPoolExecutor(max_workers=len(work)) as executor:
