@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-- **2026-08-05**: GitHub Copilot provider implemented (see `deltas.md`) — unreleased, needs version bump + publish
+- **2026-09-03**: Zero-config Claude quota discovery (PR #3) merged + documented; v1.7.0 publish in progress
 - Researching additional AI coding providers (Cursor, MiniMax, OpenCode Zen, Replit)
 
 ## Recent Changes (Last 7 Days)
@@ -19,8 +19,7 @@
 
 ## Next Steps
 
-1. Publish Copilot support (`npm version minor` → v1.6.0, tag push triggers publish.yml)
-2. Implement Replit support (High feasibility endpoint identified)
+1. Implement Replit support (High feasibility endpoint identified; blocked on a Replit token — prompts/providers/013)
 3. Monitor Cursor (cookie-only usage API), MiniMax coding plan (`coding_plan/remains` rejects API keys — MiniMax-AI/MiniMax-M2#88), and OpenCode Zen balance (feature request anomalyco/opencode#10448)
 4. Possible future: Gemini legacy OAuth auto-refresh (CLI retired 2026-06-18; expired token now visible as ⏰ in oneline)
 
