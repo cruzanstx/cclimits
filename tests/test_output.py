@@ -632,6 +632,37 @@ class TestOnelineResets:
         print_oneline(results, "5h", show_resets=True)
         assert "Antigravity: 3% (20 models) ✅ ↻1h30m" in capsys.readouterr().out
 
+    def test_antigravity_grouped_oneline_both(self, capsys):
+        """quota_groups render as paired 5h/weekly used percentages per model family."""
+        results = {"antigravity": {"status": "ok",
+                                    "quota_groups": [
+                                        {"name": "Gemini Models", "short_name": "Gemini",
+                                         "buckets": {"5h": {"used_pct": 0.1, "remaining_pct": 99.9, "resets_in": "4h 50m"},
+                                                     "weekly": {"used_pct": 0.8, "remaining_pct": 99.2, "resets_in": "13h 0m"}}},
+                                        {"name": "Claude and GPT models", "short_name": "Claude/GPT",
+                                         "buckets": {"5h": {"used_pct": 0.0, "remaining_pct": 100.0, "resets_in": "4h 59m"},
+                                                     "weekly": {"used_pct": 78.2, "remaining_pct": 21.8, "resets_in": "13h 0m"}}},
+                                    ]}}
+        print_oneline(results, "both", show_resets=True)
+        out = capsys.readouterr().out
+        assert "Antigravity Gemini: 0.1%/0.8% ✅ ↻4h50m/13h0m" in out
+        assert "Antigravity Claude/GPT: 0%/78.2% ⚠️ ↻4h59m/13h0m" in out
+        # 78.2% is used quota, not remaining headroom
+        assert "Antigravity: 78%" not in out
+
+    def test_antigravity_grouped_oneline_single_window(self, capsys):
+        """window='5h' shows only the 5h bucket, labeled."""
+        results = {"antigravity": {"status": "ok",
+                                    "quota_groups": [
+                                        {"name": "Gemini Models", "short_name": "Gemini",
+                                         "buckets": {"5h": {"used_pct": 0.1, "remaining_pct": 99.9, "resets_in": "4h 50m"},
+                                                     "weekly": {"used_pct": 0.8, "remaining_pct": 99.2, "resets_in": "13h 0m"}}},
+                                    ]}}
+        print_oneline(results, "5h", show_resets=True)
+        out = capsys.readouterr().out
+        assert "Antigravity Gemini: 0.1% (5h) ✅ ↻4h50m" in out
+        assert "78" not in out
+
     def test_zai_and_synthetic_resets(self, capsys):
         results = {
             "zai": {"status": "ok", "token_quota": {"percentage": 30.0, "resets_in": "1h 5m"}},

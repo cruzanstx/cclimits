@@ -1732,6 +1732,50 @@ def _normalize_antigravity_models(data: dict) -> list[dict]:
     return sorted(models, key=lambda item: (item["remaining_pct"], item["name"]))
 
 
+def _normalize_antigravity_groups(data: dict) -> list[dict]:
+    """Normalize retrieveUserQuotaSummary groups.
+
+    Each group (e.g. Gemini; Claude + GPT) carries explicit 5h and weekly
+    buckets.  Never infer window duration from reset timestamps: a weekly
+    reset can be hours away and a 5h reset can land tomorrow.  Preserve
+    the API's own `window` labels instead.
+    """
+    groups = []
+    for g in (data.get("groups") or []):
+        if not isinstance(g, dict):
+            continue
+        window_buckets = {}
+        legacy_buckets = []
+        for b in (g.get("buckets") or []):
+            if not isinstance(b, dict):
+                continue
+            remaining_fraction = b.get("remainingFraction")
+            try:
+                remaining_pct = float(remaining_fraction if remaining_fraction is not None else 0) * 100
+            except (TypeError, ValueError):
+                remaining_pct = 0.0
+            remaining_pct = max(0.0, min(100.0, remaining_pct))
+            bucket = {
+                "id": b.get("bucketId") or b.get("id") or "",
+                "name": b.get("displayName") or b.get("name") or "",
+                "window": b.get("window") or "",
+                "remaining_pct": remaining_pct,
+                "reset_time": b.get("resetTime") or b.get("reset_time") or "",
+            }
+            if bucket["window"]:
+                window_buckets[bucket["window"]] = bucket
+            else:
+                legacy_buckets.append(bucket)
+        if window_buckets or legacy_buckets:
+            groups.append({
+                "name": g.get("displayName") or g.get("name") or "",
+                "description": g.get("description") or "",
+                "buckets": window_buckets if window_buckets else {"5h": legacy_buckets[0]} if len(legacy_buckets) == 1 else {},
+                "unlabeled_buckets": legacy_buckets,
+            })
+    return groups
+
+
 def _earliest_antigravity_reset(models: list[dict]) -> str | None:
     """Earliest parseable reset_time ISO string across models (next bucket to refill)."""
     parsed = []
@@ -1823,6 +1867,31 @@ def get_antigravity_usage() -> dict:
             "summary": summary,
             "dashboard_url": "https://antigravity.google",
         }
+        # Grouped 5h/weekly quota windows per model family (authoritative for
+        # routing: the per-model numbers aggregate groups into per-model rows).
+        summary_headers = _antigravity_headers(access_token, "antigravity/hub/2.9.1 linux/amd64")
+        summary_status, summary_data = http_post(
+            f"{base_url}/v1internal:retrieveUserQuotaSummary", summary_headers, {"project": project_id})
+        if 200 <= summary_status < 300 and isinstance(summary_data, dict):
+            result["quota_groups"] = [
+                {
+                    "name": gl["name"],
+                    "short_name": _antigravity_group_short_name(gl["name"]),
+                    "description": gl["description"],
+                    "buckets": {
+                        win: {
+                            "used_pct": round(100 - b["remaining_pct"], 1),
+                            "remaining_pct": round(b["remaining_pct"], 1),
+                            "reset_time": b["reset_time"],
+                            "resets_in": format_reset_time(b["reset_time"]) if b["reset_time"] else "",
+                        }
+                        for win, b in gl["buckets"].items() if win == "5h" or win == "weekly"
+                    },
+                }
+                for gl in _normalize_antigravity_groups(summary_data)
+            ]
+        elif summary_status >= 400:
+            result["quota_groups_error"] = f"retrieveUserQuotaSummary returned {summary_status}: {summary_data}"
         if creds.get("source"):
             result["source"] = creds["source"]
         if refreshed_once:
@@ -2197,6 +2266,25 @@ def print_section(name: str, data: dict):
     if "gcp_project" in data:
         print(f"  📦 GCP Project: {data['gcp_project']}")
 
+    # Antigravity grouped 5h/weekly quota windows (authoritative)
+    if isinstance(data.get("quota_groups"), list) and data["quota_groups"]:
+        for gr in data["quota_groups"]:
+            print(f"\n  {gr.get('name') or 'Models'}:")
+            if gr.get("description"):
+                print(f"    {gr['description']}")
+            for win in ("5h", "weekly"):
+                b = (gr.get("buckets") or {}).get(win)
+                if not b:
+                    continue
+                print(f"    {win}: {b['used_pct']:g}% used / {b['remaining_pct']:g}% remaining", end="")
+                if b.get("resets_in"):
+                    print(f" (resets in {b['resets_in']})", end="")
+                print()
+        if data.get("quota_groups_error"):
+            print(f"  ⚠️  {data['quota_groups_error']}")
+    elif data.get("quota_groups_error"):
+        print(f"  ⚠️  {data['quota_groups_error']}")
+
     # Antigravity per-model quotas
     if isinstance(data.get("models"), list) and "summary" in data:
         if "project_id" in data:
@@ -2529,8 +2617,47 @@ def _render_gemini(data, window, use_color, show_resets=False):
     return f"Gemini: ( {' | '.join(parts)} )" if parts else None
 
 
+def _antigravity_group_short_name(name: str) -> str:
+    lowered = (name or "").lower()
+    if "gemini" in lowered:
+        return "Gemini"
+    if "claude" in lowered or "gpt" in lowered:
+        return "Claude/GPT"
+    return "".join(w[0] for w in (name or "").split() if w[0].isupper()) or "Models"
+
+
+def _antigravity_group_oneline(data, window, use_color, show_resets=False):
+    """New grouped format: 'Antigravity <Group>: 5h%/7d% <icon> ↻a/b' per group."""
+    if not (data.get("quota_groups") and isinstance(data["quota_groups"], list)):
+        return None
+    parts = []
+    for gr in data["quota_groups"]:
+        group_name = gr.get("short_name") or gr.get("name") or "Models"
+        buckets = gr.get("buckets") or {}
+        b5, bw = buckets.get("5h"), buckets.get("weekly")
+        if window == "both" and b5 and bw:
+            u5, uw = b5["used_pct"], bw["used_pct"]
+            s = _fmt_both(f"Antigravity {group_name}", f"{u5:g}", f"{uw:g}", use_color)
+            resets = (b5.get("resets_in"), bw.get("resets_in"))
+        else:
+            bucket = b5 if (window != "7d" and b5) else (bw if bw else b5)
+            if not bucket:
+                continue
+            suffix = "(7d)" if bucket is bw else "(5h)"
+            s = _fmt_single(f"Antigravity {group_name}", f"{bucket['used_pct']:g}% {suffix}", bucket["used_pct"], "", use_color)
+            resets = (bucket.get("resets_in"),)
+        if show_resets and (suf := _reset_suffix(*resets)):
+            s += f" {suf}"
+        parts.append(s)
+    return " | ".join(parts) if parts else None
+
+
 def _render_antigravity(data, window, use_color, show_resets=False):
-    if not (data.get("status") == "ok" and "summary" in data):
+    if not (data.get("status") == "ok"):
+        return None
+    if grouped := _antigravity_group_oneline(data, window, use_color, show_resets):
+        return grouped
+    if "summary" not in data:
         return None
     s = data["summary"]
     used = max(0, 100 - int(s.get("min_remaining_pct", 0)))

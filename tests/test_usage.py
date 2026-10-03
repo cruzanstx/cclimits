@@ -352,6 +352,22 @@ class TestGetAntigravityUsage:
                     "claude-sonnet-4-6": {"quotaInfo": {"remainingFraction": 0.71, "resetTime": "2026-05-30T18:00:00Z"}},
                 }
             }),
+            (200, {
+                "groups": [
+                    {"displayName": "Gemini Models", "description": "Gemini Flash, Gemini Pro",
+                     "buckets": [
+                         {"bucketId": "gemini-weekly", "displayName": "Weekly Limit Remaining", "window": "weekly",
+                          "remainingFraction": 0.99, "resetTime": "2026-05-30T18:00:00Z"},
+                         {"bucketId": "gemini-5h", "displayName": "Five Hour Limit Remaining", "window": "5h",
+                          "remainingFraction": 0.98, "resetTime": "2026-05-30T17:00:00Z"},
+                     ]},
+                    {"displayName": "Claude and GPT models", "description": "Claude Opus, Claude Sonnet, GPT-OSS",
+                     "buckets": [
+                         {"bucketId": "3p-weekly", "window": "weekly", "remainingFraction": 0.22, "resetTime": "2026-05-30T16:00:00Z"},
+                         {"bucketId": "3p-5h", "window": "5h", "remainingFraction": 1.0, "resetTime": "2026-05-30T17:00:00Z"},
+                     ]},
+                ]
+            }),
         ]
 
         result = get_antigravity_usage()
@@ -366,6 +382,31 @@ class TestGetAntigravityUsage:
             "next_reset_in": "Now",  # mock resetTime is in the past
         }
         assert result["models"][0]["name"] == "claude-sonnet-4-6"
+        assert [g["short_name"] for g in result["quota_groups"]] == ["Gemini", "Claude/GPT"]
+        gemini = result["quota_groups"][0]["buckets"]
+        assert gemini["weekly"]["used_pct"] == 1.0
+        assert gemini["5h"]["used_pct"] == 2.0
+        claude = result["quota_groups"][1]["buckets"]
+        assert claude["weekly"]["used_pct"] == 78.0
+        assert claude["weekly"]["remaining_pct"] == 22.0
+        assert claude["5h"]["used_pct"] == 0.0
+
+    @patch('cclimits.get_antigravity_credentials')
+    @patch('cclimits.http_post')
+    def test_quota_summary_failure_degrades_to_per_model(self, mock_post, mock_creds):
+        """retrieveUserQuotaSummary outage must not break the per-model result."""
+        mock_creds.return_value = {"access_token": "test-token", "source": "env"}
+        mock_post.side_effect = [
+            (200, {"cloudaicompanionProject": {"id": "test-project"}}),
+            (200, {"models": {"gemini-3-pro": {"quotaInfo": {"remainingFraction": 0.92}}}}),
+            (403, {"error": "forbidden"}),
+        ]
+
+        result = get_antigravity_usage()
+
+        assert result["status"] == "ok"
+        assert "quota_groups" not in result
+        assert "retrieveUserQuotaSummary returned 403" in result["quota_groups_error"]
 
     def test_earliest_reset_picks_soonest_and_skips_bad(self):
         """_earliest_antigravity_reset returns the soonest ISO time, ignoring empty/garbage."""
