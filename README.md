@@ -76,8 +76,8 @@ cclimits --no-cache-write         # Read-only observer mode (never writes the ca
 ### Compact One-liner (--oneline)
 
 ```bash
-# Single window (5h or 7d); Copilot shows its monthly premium-request quota as (mo)
-Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅ | Kimi: $49.59 ✅ | Antigravity: 35% (8 models) ✅ | Copilot: 20% (mo) ✅
+# Single window (5h or 7d); Copilot shows its monthly premium-request quota as (mo); Antigravity reports per-family quota groups
+Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ | Flash 1% ✅ | Pro 10% ✅ ) | OpenRouter: $47.91 ✅ | Kimi: $49.59 ✅ | Antigravity Gemini: 12.2% (5h) ✅ | Antigravity Claude/GPT: 0% (5h) ✅ | Copilot: 20% (mo) ✅
 
 # Both windows (--oneline both) - shows 5h/7d combined (Z.AI: 5h-tokens%/monthly-MCP-tools%)
 Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1%/16% ✅ | OpenRouter: $47.91 ✅
@@ -86,10 +86,10 @@ Claude: 4.0%/10.0% ✅ | Codex: 0%/2% ✅ | Z.AI: 1%/16% ✅ | OpenRouter: $47.9
 Z.AI: 1% (5h) ✅ ⚡3x
 
 # No emoji mode (--noemoji) - colorizes percentages directly (green/yellow/red)
-Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91 | Antigravity: 35% (8 models)
+Claude: 4.0% (5h) | Codex: 0% (5h) | Z.AI: 1% (5h) | OpenRouter: $47.91 | Antigravity Gemini: 12.2% (5h) | Antigravity Claude/GPT: 0% (5h)
 
-# With reset countdowns (--resets / --timeremaining) - ↻5h-reset/7d-reset; Antigravity shows its earliest model reset
-Claude: 4.0%/10.0% ✅ ↻2h15m/3d17h | Codex: 0%/2% ✅ ↻1h05m/6d23h | Z.AI: 1% (5h) ✅ ↻3h02m | Antigravity: 3% (20 models) ✅ ↻10m
+# With reset countdowns (--resets / --timeremaining) - ↻5h-reset/7d-reset
+Claude: 4.0%/10.0% ✅ ↻2h15m/3d17h | Codex: 0%/2% ✅ ↻1h05m/6d23h | Z.AI: 1% (5h) ✅ ↻3h02m | Antigravity Gemini: 12.2%/2.2% ✅ ↻1h42m/4h52m | Antigravity Claude/GPT: 0%/0.3% ✅ ↻4h59m/6d17h
 
 # --resets in both mode also shows Z.AI's monthly MCP-tools reset as the second countdown
 Z.AI: 1%/16% ✅ ↻3h28m/5d10h
@@ -191,7 +191,28 @@ Exception: **Gemini** with an expired token or no credentials is hidden from che
   📦 Project: my-cloud-code-project
   📊 Tier: free
 
-  Model Quotas:
+  Quota Groups (Gemini and Claude/GPT models draw from separate pools):
+    Antigravity Gemini
+      5-Hour Window:
+        Used:      12.2%
+        Remaining: 87.8%
+        Resets in: 1h 42m
+      7-Day Window:
+        Used:      2.2%
+        Remaining: 97.8%
+        Resets in: 4h 52m
+
+    Antigravity Claude/GPT
+      5-Hour Window:
+        Used:      0.0%
+        Remaining: 100.0%
+        Resets in: 4h 59m
+      7-Day Window:
+        Used:      0.3%
+        Remaining: 99.7%
+        Resets in: 6d 17h
+
+  Model Quotas (per-model detail):
     Models:    8
     Tightest:  65% remaining
     Average:   83% remaining
