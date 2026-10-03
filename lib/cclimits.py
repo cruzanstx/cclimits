@@ -43,7 +43,14 @@ GEMINI_TIERS = {
 
 ANTIGRAVITY_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
 ANTIGRAVITY_CLIENT_SECRET = "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"
+# Endpoint order matters: agy ≥1.2.x routes ALL traffic (auth, model calls,
+# quota) to the daily/preview backend, NOT cloudcode-pa.  The prod endpoint
+# keeps a *different* Claude/GPT weekly number (observed 78% used vs ~0% on
+# daily, 2026-10-03) because the two store separate bucket state for the
+# 3p-weekly quota — so querying prod first made cclimits disagree with the
+# agy /usage panel.  Query daily first; fall back to prod if daily is down.
 ANTIGRAVITY_ENDPOINTS = [
+    "https://daily-cloudcode-pa.googleapis.com",
     "https://cloudcode-pa.googleapis.com",
     "https://daily-cloudcode-pa.sandbox.googleapis.com",
     "https://autopush-cloudcode-pa.sandbox.googleapis.com",
