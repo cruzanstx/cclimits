@@ -1,6 +1,6 @@
 {
   "name": "cclimits",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Check quota/usage for AI coding CLI tools (Claude Code, Codex, Gemini, Antigravity, Z.AI, OpenRouter, Kimi, Synthetic.new, Copilot)",
   "bin": {
     "cclimits": "bin/cclimits.js"
