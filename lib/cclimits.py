@@ -3026,11 +3026,11 @@ Examples:
   cclimits --oneline      # Compact one-liner (5h window)
   cclimits --oneline 7d   # Compact one-liner (7d window)
   cclimits --oneline both # Compact one-liner (5h/7d window)
-  cclimits --oneline both --resets  # One-liner with reset countdowns (↻3h24m/4d12h)
+  cclimits --oneline both --resets  # One-liner with reset countdowns (resets 3h24m/4d12h)
 
 Example Output:
   # One-liner (5h window)
-  Claude: 4.0% (5h) ✅ | Codex: 0% (5h) ✅ | Z.AI: 1% (5h) ✅ | Gemini: ( 3-Flash 7% ✅ ... ) | Kimi: $49.59 ✅ | Antigravity: 65% (8 models) ✅ | Synthetic: 0% (5h) ✅
+  Claude: 4.0% (5h) [ok] | Codex: 0% (5h) [ok] | Z.AI: 1% (5h) [ok] | Gemini: ( 3-Flash 7% [ok] ... ) | Kimi: $49.59 [ok] | Antigravity: 65% (8 models) [ok] | Synthetic: 0% (5h) [ok]
 """
 
     parser = argparse.ArgumentParser(
@@ -3044,7 +3044,7 @@ Example Output:
     parser.add_argument("--noemoji", action="store_true",
                         help="Use colored text instead of emojis (for terminals without emoji support)")
     parser.add_argument("--resets", "--timeremaining", action="store_true", dest="resets",
-                        help="Append reset countdowns (↻2h15m) to --oneline output")
+                        help="Append reset countdowns (resets 2h15m) to --oneline output")
     for _p in PROVIDERS:
         parser.add_argument(
             f"--{_p.get('cli', _p['key'])}",
